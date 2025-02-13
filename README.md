@@ -2,6 +2,17 @@
 
 A real-time GPS tracking server application with support for multiple devices and historical data viewing.
 
+## Features
+
+- Real-time GPS tracking
+- Multiple device support
+- Historical data viewing
+- Secure authentication
+- Rate limiting and DDoS protection
+- Comprehensive logging
+- Error tracking and monitoring
+- Role-based access control
+
 ## Deployment Guide
 
 ### Prerequisites
@@ -89,6 +100,28 @@ A real-time GPS tracking server application with support for multiple devices an
    eb deploy
    ```
 
+### Security Features
+
+1. Authentication & Authorization
+   - Session-based authentication
+   - JWT support
+   - Role-based access control
+   - Account locking after failed attempts
+   - Password complexity requirements
+
+2. API Security
+   - Rate limiting
+   - CORS protection
+   - XSS prevention
+   - Security headers (via Helmet)
+   - Request size limiting
+
+3. Logging & Monitoring
+   - Structured logging
+   - Error tracking
+   - Request logging
+   - Security event logging
+
 ### Production Considerations
 
 1. Database
@@ -123,6 +156,7 @@ A real-time GPS tracking server application with support for multiple devices an
 | NODE_ENV | Environment mode | development |
 | MONGODB_URI | MongoDB connection string | mongodb://localhost:27017/trackingserver |
 | SESSION_SECRET | Session encryption key | your_secret_key |
+| JWT_SECRET | JWT signing key | your_jwt_secret_key |
 
 ### Health Checks
 
@@ -149,7 +183,7 @@ The application provides health check endpoints:
 ### Support
 
 For issues and support:
-1. Check the [issues](https://github.com/your-repo/issues) section
+1. Check the [issues](https://github.com/ccgriffin/tracking-server/issues) section
 2. Create a new issue with detailed information
 3. Follow the issue template guidelines
 

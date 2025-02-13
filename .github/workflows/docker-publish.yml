@@ -8,8 +8,10 @@ on:
     branches: [ main ]
 
 env:
-  REGISTRY: ghcr.io
+  GHCR_REGISTRY: ghcr.io
+  DOCKER_REGISTRY: docker.io
   IMAGE_NAME: ${{ github.repository }}
+  DOCKER_IMAGE: c43211/tracking-server
 
 jobs:
   build:
@@ -17,6 +19,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      issues: write
 
     steps:
       - name: Checkout repository
@@ -30,6 +33,7 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+        continue-on-error: false
 
       # Add tests when they're implemented
       #- name: Run tests
@@ -39,15 +43,24 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v2
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ${{ env.GHCR_REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Extract metadata (tags, labels) for Docker
         id: meta
         uses: docker/metadata-action@v4
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: |
+            ${{ env.GHCR_REGISTRY }}/${{ env.IMAGE_NAME }}
+            ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_IMAGE }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -67,3 +80,22 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Create Issue on Failure
+        if: failure()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🚨 Build failed for commit ${context.sha}`,
+              body: `Build failed for commit ${context.sha}
+
+              Workflow: ${context.workflow}
+              Run ID: ${context.runId}
+              Run Number: ${context.runNumber}
+              URL: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}
+              `
+            });
+            console.log('Created issue #' + issue.data.number);
