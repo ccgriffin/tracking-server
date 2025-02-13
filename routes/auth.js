@@ -85,8 +85,13 @@ router.post('/register', async (req, res, next) => {
  */
 router.post('/login', async (req, res, next) => {
     try {
-        const { username, password } = req.body;
-        const user = await User.findOne({ username });
+        const { username, email, password } = req.body;
+        const user = await User.findOne({
+            $or: [
+                { username },
+                { email }
+            ]
+        });
         
         if (!user) {
             logger.warn(`Login failed: User ${username} not found`);

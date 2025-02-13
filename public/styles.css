@@ -275,11 +275,25 @@ body {
     border: 1px solid var(--border-color);
     margin-bottom: 1rem;
     transition: var(--transition);
+    cursor: pointer;
 }
 
 .device-card:hover {
     transform: translateX(4px);
     box-shadow: var(--shadow-md);
+}
+
+.device-card.selected {
+    border: 2px solid var(--primary-color);
+    background-color: rgba(79, 70, 229, 0.1);
+}
+
+.device-card .device-actions {
+    pointer-events: none;
+}
+
+.device-card .device-actions button {
+    pointer-events: all;
 }
 
 .device-header {

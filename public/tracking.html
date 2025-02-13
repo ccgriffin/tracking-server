@@ -158,6 +158,158 @@
             }).addTo(map);
         }
 
+        // Fetch last known locations
+        async function fetchLastLocations() {
+            try {
+                const response = await fetch('/api/tracker/list');
+                if (!response.ok) {
+                    throw new Error('Failed to fetch tracker data');
+                }
+                const data = await response.json();
+                updateMap(data.trackers);
+                updateDeviceList(data.trackers);
+                updateStats(data.trackers);
+            } catch (error) {
+                console.error('Error fetching locations:', error);
+            }
+        }
+
+        // Update map markers
+        function updateMap(trackers) {
+            // Remove old markers
+            Object.values(markers).forEach(marker => map.removeLayer(marker));
+            markers = {};
+
+            trackers.forEach(tracker => {
+                if (tracker.lastLocation) {
+                    const { latitude, longitude } = tracker.lastLocation;
+                    const marker = L.marker([latitude, longitude])
+                        .bindPopup(createPopupContent(tracker));
+                    
+                    markers[tracker.identifier] = marker;
+                    marker.addTo(map);
+                }
+            });
+        }
+
+        // Create popup content
+        function createPopupContent(tracker) {
+            const { deviceName, speed, batteryLevel, timestamp } = tracker.lastLocation;
+            return `
+                <div class="popup-content">
+                    <h3>${deviceName || tracker.identifier}</h3>
+                    <p>Speed: ${speed || 0} km/h</p>
+                    <p>Battery: ${batteryLevel || 'N/A'}%</p>
+                    <p>Last Update: ${new Date(timestamp).toLocaleString()}</p>
+                </div>
+            `;
+        }
+
+        // Update device list
+        function updateDeviceList(trackers) {
+            const deviceDetails = document.getElementById('deviceDetails');
+            deviceDetails.innerHTML = trackers.map(device => createDeviceCard(device)).join('');
+        }
+
+        // Update statistics
+        function updateStats(trackers) {
+            const now = new Date();
+            const activeDevices = trackers.filter(t => 
+                t.lastLocation && (now - new Date(t.lastLocation.timestamp)) < INACTIVE_THRESHOLD
+            );
+            const movingDevices = trackers.filter(t => 
+                t.lastLocation && t.lastLocation.speed > MOVING_SPEED_THRESHOLD
+            );
+            const lowBatteryDevices = trackers.filter(t => 
+                t.lastLocation && t.lastLocation.batteryLevel < LOW_BATTERY_THRESHOLD
+            );
+
+            document.getElementById('activeDevicesCount').textContent = activeDevices.length;
+            document.getElementById('movingDevicesCount').textContent = movingDevices.length;
+            document.getElementById('lowBatteryCount').textContent = lowBatteryDevices.length;
+        }
+
+        // Start auto refresh
+        function startAutoRefresh() {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+            refreshInterval = setInterval(fetchLastLocations, 10000); // Refresh every 10 seconds
+        }
+
+        // Utility function to convert km/h to mph
+        function kmhToMph(kmh) {
+            return Math.round(kmh * 0.621371);
+        }
+
+        // Utility function to format time ago
+        function getTimeAgo(date) {
+            const seconds = Math.floor((new Date() - date) / 1000);
+            
+            if (seconds < 60) return 'Just now';
+            if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+            if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+            return `${Math.floor(seconds / 86400)}d ago`;
+        }
+
+        // Center map on device
+        function centerOnDevice(identifier) {
+            const marker = markers[identifier];
+            if (marker) {
+                map.setView(marker.getLatLng(), 15);
+                marker.openPopup();
+            }
+        }
+
+        // Show device history
+        async function showDeviceHistory(identifier) {
+            try {
+                const startDate = document.getElementById('startDate').value;
+                const endDate = document.getElementById('endDate').value;
+
+                if (!startDate || !endDate) {
+                    alert('Please select start and end dates');
+                    return;
+                }
+
+                const response = await fetch(`/api/tracker/history/${identifier}?start=${startDate}&end=${endDate}`);
+                if (!response.ok) {
+                    throw new Error('Failed to fetch history');
+                }
+
+                const data = await response.json();
+                if (!data.history || data.history.length === 0) {
+                    alert('No history data available for selected period');
+                    return;
+                }
+
+                // Clear existing polylines
+                Object.values(polylines).forEach(polyline => map.removeLayer(polyline));
+                polylines = {};
+
+                // Create path coordinates
+                const coordinates = data.history.map(point => [
+                    point.position.latitude,
+                    point.position.longitude
+                ]);
+
+                // Draw polyline
+                const polyline = L.polyline(coordinates, {
+                    color: 'blue',
+                    weight: 3,
+                    opacity: 0.5
+                }).addTo(map);
+
+                polylines[identifier] = polyline;
+
+                // Fit map to show entire path
+                map.fitBounds(polyline.getBounds());
+            } catch (error) {
+                console.error('Error fetching history:', error);
+                alert('Failed to fetch device history');
+            }
+        }
+
         // Add Tracker Modal
         const modal = document.getElementById('addTrackerModal');
         const addTrackerButton = document.getElementById('addTrackerButton');
@@ -246,7 +398,7 @@
             const speedMph = kmhToMph(device.lastLocation.speed || 0);
 
             return `
-                <div class="device-card ${isActive ? 'status-active' : 'status-inactive'}">
+                <div class="device-card ${isActive ? 'status-active' : 'status-inactive'}" data-identifier="${device.ident}">
                     <div class="device-status-indicator"></div>
                     <div class="device-header">
                         <h4>
@@ -289,6 +441,27 @@
         initMap();
         fetchLastLocations();
         startAutoRefresh();
+
+        // Add event listeners for history controls
+        document.getElementById('showHistoryButton').addEventListener('click', () => {
+            const selectedDevices = Array.from(document.querySelectorAll('.device-card.selected'))
+                .map(card => card.dataset.identifier);
+            
+            if (selectedDevices.length === 0) {
+                alert('Please select a device to view history');
+                return;
+            }
+
+            showDeviceHistory(selectedDevices[0]);
+        });
+
+        // Add click handler for device selection
+        document.getElementById('deviceDetails').addEventListener('click', (e) => {
+            const card = e.target.closest('.device-card');
+            if (card && !e.target.closest('.device-actions')) {
+                card.classList.toggle('selected');
+            }
+        });
     </script>
 
     <style>
@@ -395,6 +568,29 @@
         .action-btn.danger:hover {
             background: var(--danger-color);
             color: white;
+        }
+
+        .device-card {
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .device-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .device-card.selected {
+            border: 2px solid var(--primary-color);
+            background-color: rgba(79, 70, 229, 0.1);
+        }
+
+        .device-card .device-actions {
+            pointer-events: none;
+        }
+
+        .device-card .device-actions button {
+            pointer-events: all;
         }
     </style>
 </body>
