@@ -21,6 +21,7 @@ const userSchema = new mongoose.Schema({
     username: {
         type: String,
         required: true,
+        index: true,
         unique: true,
         trim: true,
         minlength: [3, 'Username must be at least 3 characters long']
@@ -28,6 +29,7 @@ const userSchema = new mongoose.Schema({
     email: {
         type: String,
         required: true,
+        index: true,
         unique: true,
         trim: true,
         lowercase: true,
@@ -70,10 +72,6 @@ const userSchema = new mongoose.Schema({
 }, {
     timestamps: true
 });
-
-// Indexes for faster queries
-userSchema.index({ email: 1 });
-userSchema.index({ username: 1 });
 
 // Password hash middleware
 userSchema.pre('save', async function(next) {

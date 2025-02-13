@@ -8,6 +8,7 @@ const auth = require('./middleware/auth');
 const trackerRoutes = require('./routes/tracker');
 const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
+const flespiRoutes = require('./routes/flespi');
 
 const app = express();
 
@@ -51,7 +52,7 @@ app.use(express.static('public', {
 app.set('trust proxy', 1);
 
 // API Routes Configuration
-app.use('/api/tracker/data', trackerRoutes); // Flespi data endpoint (no auth)
+app.use('/api/flespi', flespiRoutes); // Flespi data endpoint (no auth)
 app.use('/api/tracker', auth.isAuthenticated, trackerRoutes); // Protected tracker endpoints
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', auth.isAuthenticated, adminRoutes);

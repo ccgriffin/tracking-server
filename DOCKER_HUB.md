@@ -148,7 +148,7 @@ services:
 2. Configure stream settings:
    ```
    Name: Tracking Server Stream
-   Target URL: http://your-server:3000/api/tracker/data
+   Target URL: http://your-server:3000/api/flespi/data
    Content type: application/json
    ```
 
@@ -175,6 +175,17 @@ services:
      }
    }
    ```
+
+### 3. Testing the Integration
+
+1. Monitor incoming data:
+```bash
+# View server logs
+docker compose logs -f tracking-server
+
+# Check MongoDB data
+docker compose exec mongodb mongosh trackingserver --eval "db.trackerdata.find().sort({timestamp:-1}).limit(1)"
+```
 
 ## Environment Variables
 
