@@ -37,7 +37,15 @@ const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/tracki
 
 // Middleware Configuration
 app.use(express.json({ limit: '10kb' }));
-app.use(express.static('public'));
+
+// Serve static files with explicit MIME types
+app.use(express.static('public', {
+    setHeaders: (res, path) => {
+        if (path.endsWith('.css')) {
+            res.setHeader('Content-Type', 'text/css');
+        }
+    }
+}));
 
 // Trust first proxy
 app.set('trust proxy', 1);
@@ -109,8 +117,8 @@ mongoose.connect(MONGODB_URI, {
 .then(() => {
     console.log('MongoDB connected successfully');
     
-    app.listen(PORT, () => {
-        console.log(`Server is running on http://localhost:${PORT}`);
+    app.listen(PORT, '0.0.0.0', () => {
+        console.log(`Server is running on http://0.0.0.0:${PORT}`);
         console.log('Environment:', process.env.NODE_ENV || 'development');
     });
 })

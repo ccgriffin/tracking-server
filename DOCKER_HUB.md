@@ -18,17 +18,18 @@ The official Docker image is available at [hub.docker.com/r/c43211/tracking-serv
 - 👥 Role-based access control
 - 🌓 Dark mode support
 
-## Deployment Options
+## Quick Start
 
-### Option 1: Using Nginx Reverse Proxy (Recommended)
+### Option 1: Using Docker Hub Image
 
-1. Create a `docker-compose.yml` file:
+Create a `docker-compose.yml` file:
+
 ```yaml
 services:
   tracking-server:
     image: c43211/tracking-server:latest
     ports:
-      - "127.0.0.1:3000:3000"  # Only accessible locally
+      - "3000:3000"
     environment:
       - NODE_ENV=production
       - MONGODB_URI=mongodb://mongodb:27017/trackingserver
@@ -44,6 +45,8 @@ services:
 
   mongodb:
     image: mongo:latest
+    ports:
+      - "27017:27017"
     volumes:
       - mongodb-data:/data/db
     networks:
@@ -60,80 +63,119 @@ volumes:
   app-logs:
 ```
 
-2. Create an Nginx configuration (e.g., `/etc/nginx/sites-available/tracking-server`):
-```nginx
-server {
-    listen 80;
-    server_name your-domain.com;
-    return 301 https://$server_name$request_uri;
-}
-
-server {
-    listen 443 ssl;
-    server_name your-domain.com;
-
-    ssl_certificate /path/to/your/fullchain.pem;
-    ssl_certificate_key /path/to/your/privkey.pem;
-
-    # Modern SSL configuration
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;
-    ssl_prefer_server_ciphers off;
-
-    location / {
-        proxy_pass http://localhost:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
-    }
-}
-```
-
-3. Start the services:
+Then run:
 ```bash
 # Create .env file with your secret
 echo "SESSION_SECRET=your-secret-here" > .env
 
-# Start the services
+# Pull and start the services
 docker compose up -d
 ```
 
-### Option 2: Using Apache Reverse Proxy
+### Option 2: Run Individual Container
 
-1. Create a `docker-compose.yml` file (same as above)
+If you have your own MongoDB instance:
 
-2. Configure Apache:
-```apache
-<VirtualHost *:80>
-    ServerName your-domain.com
-    Redirect permanent / https://your-domain.com/
-</VirtualHost>
-
-<VirtualHost *:443>
-    ServerName your-domain.com
-    
-    SSLEngine on
-    SSLCertificateFile /path/to/your/fullchain.pem
-    SSLCertificateKeyFile /path/to/your/privkey.pem
-
-    ProxyPreserveHost On
-    ProxyPass / http://localhost:3000/
-    ProxyPassReverse / http://localhost:3000/
-
-    RequestHeader set X-Forwarded-Proto "https"
-    RequestHeader set X-Forwarded-Port "443"
-</VirtualHost>
-```
-
-3. Start the services:
 ```bash
-docker compose up -d
+# Create volumes for data and logs
+docker volume create tracking-data
+docker volume create tracking-logs
+
+# Pull and run the container
+docker pull c43211/tracking-server:latest
+
+docker run -d \
+  --name tracking-server \
+  -p 3000:3000 \
+  -e MONGODB_URI=mongodb://your-mongodb-uri \
+  -e SESSION_SECRET=your-session-secret \
+  -e NODE_ENV=production \
+  -v tracking-data:/usr/src/app/data \
+  -v tracking-logs:/usr/src/app/logs \
+  c43211/tracking-server:latest
 ```
+
+## Setting Up Flespi Stream
+
+### 1. Create Flespi Channel
+
+1. Sign up at [flespi.io](https://flespi.io)
+2. Go to "Channels" → "Create channel"
+3. Select device protocol (e.g., "GPRS")
+4. Configure basic settings:
+   ```
+   Name: Your Channel Name
+   Protocol: Your Device Protocol
+   ```
+
+### 2. Configure HTTP Stream
+
+1. Go to "Streams" → "Create stream"
+2. Configure stream settings:
+   ```
+   Name: Tracking Server Stream
+   Target URL: http://your-server:3000/api/tracker/data
+   Content type: application/json
+   ```
+
+3. Set up data mapping:
+   ```json
+   {
+     "ident": "%.device.id",
+     "timestamp": "%.timestamp",
+     "position": {
+       "latitude": "%.position.latitude",
+       "longitude": "%.position.longitude",
+       "speed": "%.position.speed"
+     },
+     "battery": {
+       "level": "%.battery.level"
+     },
+     "engine": {
+       "ignition": {
+         "status": "%.engine.ignition"
+       }
+     },
+     "device": {
+       "name": "%.device.name"
+     }
+   }
+   ```
+
+### 3. Add Authentication
+
+1. In stream settings, add header:
+   ```
+   Authorization: Bearer your-api-token
+   ```
+
+2. Configure retry settings:
+   ```
+   Max retries: 3
+   Retry interval: 60 seconds
+   ```
+
+### 4. Register Devices
+
+1. Go to "Devices" → "Create device"
+2. Select your channel
+3. Enter device identifier
+4. Save and note the device token
+
+### 5. Monitor Data Flow
+
+1. Check stream status in Flespi panel
+2. View logs in tracking server:
+   ```bash
+   docker logs -f tracking-server
+   ```
+
+3. Verify data in MongoDB:
+   ```bash
+   docker exec -it mongodb mongosh
+   use trackingserver
+   db.trackerdata.find()
+   ```
 
 ## Environment Variables
 

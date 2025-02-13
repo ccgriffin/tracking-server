@@ -21,7 +21,8 @@ VOLUME ["/usr/src/app/data", "/usr/src/app/logs"]
 
 # Create logs directory and set permissions
 RUN mkdir -p /usr/src/app/logs && \
-    chown -R node:node /usr/src/app/logs
+    chown -R node:node /usr/src/app/logs && \
+    chown -R node:node /usr/src/app/public
 
 # Add security measures
 USER node
