@@ -1,50 +1,107 @@
 const User = require('../models/User');
+const jwt = require('jsonwebtoken');
+const { logger } = require('./logger');
 
 /**
  * Authentication Middleware
  * @module middleware/auth
  */
 
+const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key';
+const SESSION_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
+
 /**
- * Middleware to verify if a user is authenticated via session
- * 
- * This middleware checks if there is a valid user session and attaches
- * the user object to the request if authenticated. If no valid session
- * exists, it returns a 401 Unauthorized response.
- * 
- * @param {Object} req - Express request object
- * @param {Object} req.session - Session object containing user information
- * @param {string} req.session.userId - ID of the authenticated user
- * @param {Object} res - Express response object
- * @param {Function} next - Express next middleware function
- * @returns {void}
- * @throws {Error} 401 - If user is not authenticated
- * @throws {Error} 500 - If server error occurs during authentication
+ * Verify JWT token
+ * @param {string} token - JWT token to verify
+ * @returns {Promise<Object>} Decoded token payload
+ */
+const verifyToken = (token) => {
+    return new Promise((resolve, reject) => {
+        jwt.verify(token, JWT_SECRET, (err, decoded) => {
+            if (err) reject(err);
+            resolve(decoded);
+        });
+    });
+};
+
+/**
+ * Generate JWT token
+ * @param {Object} payload - Token payload
+ * @returns {string} JWT token
+ */
+const generateToken = (payload) => {
+    return jwt.sign(payload, JWT_SECRET, { expiresIn: '24h' });
+};
+
+/**
+ * Authentication middleware
+ * Supports both session and JWT authentication
  */
 const isAuthenticated = async (req, res, next) => {
     try {
-        console.log('Session:', req.session); // Debug log for session state
+        // Check for JWT authentication first
+        const authHeader = req.headers.authorization;
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+            const token = authHeader.substring(7);
+            try {
+                const decoded = await verifyToken(token);
+                const user = await User.findById(decoded.userId);
+                if (!user) {
+                    logger.warn(`JWT auth failed: User ${decoded.userId} not found`);
+                    return res.status(401).json({ message: 'Authentication failed' });
+                }
+                req.user = user;
+                return next();
+            } catch (err) {
+                logger.warn(`JWT verification failed: ${err.message}`);
+            }
+        }
 
-        // Check if user ID exists in session
+        // Fallback to session authentication
         if (!req.session.userId) {
+            logger.warn('Session auth failed: No session found');
             return res.status(401).json({ message: 'Authentication required' });
         }
 
-        // Find user by ID from session
-        const user = await User.findById(req.session.userId);
-        if (!user) {
-            // Clear invalid session and return error
+        // Check session expiry
+        const sessionAge = Date.now() - req.session.createdAt;
+        if (sessionAge > SESSION_EXPIRY) {
+            logger.warn(`Session expired for user ${req.session.userId}`);
             req.session.destroy();
-            return res.status(401).json({ message: 'User not found' });
+            return res.status(401).json({ message: 'Session expired' });
         }
 
-        // Attach user object to request for use in subsequent middleware/routes
+        const user = await User.findById(req.session.userId);
+        if (!user) {
+            logger.warn(`Session auth failed: User ${req.session.userId} not found`);
+            req.session.destroy();
+            return res.status(401).json({ message: 'Authentication failed' });
+        }
+
+        // Check if account is locked
+        if (user.isLocked()) {
+            logger.warn(`Access denied: Account ${user._id} is locked`);
+            return res.status(401).json({ message: 'Account is locked due to too many failed attempts' });
+        }
+
+        // Check if account is active
+        if (user.status !== 'active') {
+            logger.warn(`Access denied: Account ${user._id} is ${user.status}`);
+            return res.status(401).json({ message: `Account is ${user.status}` });
+        }
+
+        // Extend session on activity
+        req.session.createdAt = Date.now();
         req.user = user;
         next();
     } catch (error) {
-        console.error('Authentication error:', error);
+        logger.error('Authentication error:', error);
         next(error);
     }
 };
 
-module.exports = isAuthenticated;
+module.exports = {
+    isAuthenticated,
+    generateToken,
+    verifyToken
+};

@@ -1,8 +1,9 @@
 const express = require('express');
 const session = require('express-session');
 const mongoose = require('mongoose');
-const bodyParser = require('body-parser');
 const path = require('path');
+const { securityMiddleware } = require('./middleware/security');
+const { morganMiddleware, requestLogger, errorLogger } = require('./middleware/logger');
 const trackerRoutes = require('./routes/tracker');
 const authRoutes = require('./routes/auth');
 
@@ -13,88 +14,100 @@ const authRoutes = require('./routes/auth');
 
 const app = express();
 
+// Apply security middleware (helmet, cors, rate limiting, etc.)
+securityMiddleware(app);
+
+// Apply logging middleware
+app.use(morganMiddleware);
+app.use(requestLogger);
+
 /**
  * Session Configuration
  * Configures express-session middleware for user authentication
- * - Secret key used for signing session ID cookie
- * - Sessions are not saved for unmodified sessions
- * - Sessions are saved even if uninitialized
- * - Cookie security is disabled for non-HTTPS environments
  */
 app.use(session({
-    secret: 'your_secret_key',
+    secret: process.env.SESSION_SECRET || 'your_secret_key',
     resave: false,
-    saveUninitialized: true,
-    cookie: { secure: false }
+    saveUninitialized: false,
+    cookie: {
+        secure: process.env.NODE_ENV === 'production',
+        httpOnly: true,
+        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    }
 }));
 
 // Environment Variables
 const PORT = process.env.PORT || 3000;
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/trackingserver';
 
 /**
  * Middleware Configuration
- * - bodyParser.json() for parsing JSON request bodies
- * - express.static for serving static files from 'public' directory
  */
-app.use(bodyParser.json());
+app.use(express.json({ limit: '10kb' })); // Body size limiting
 app.use(express.static('public'));
 
 /**
  * API Routes Configuration
- * - /api/tracker: Routes for tracker data operations
- * - /api/auth: Routes for authentication operations
  */
 app.use('/api/tracker', trackerRoutes);
 app.use('/api/auth', authRoutes);
 
 /**
- * Serve login page at root path
- * @route GET /
- * @returns {HTML} Login page
+ * Serve static pages
  */
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
 
-/**
- * Serve tracking page
- * @route GET /tracking
- * @returns {HTML} Tracking interface page
- */
 app.get('/tracking', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'tracking.html'));
 });
 
 /**
- * Global Error Handler
- * Handles various types of errors and sends appropriate responses
- * - Validation errors return 400 with detailed error messages
- * - Other errors return 500 with generic message (detailed in development)
+ * Health check endpoint
  */
+app.get('/health', (req, res) => {
+    res.status(200).json({
+        status: 'healthy',
+        timestamp: new Date(),
+        uptime: process.uptime()
+    });
+});
+
+/**
+ * Global Error Handler
+ */
+app.use(errorLogger);
 app.use((err, req, res, next) => {
     console.error('Error:', err);
     
     if (err.name === 'ValidationError') {
         return res.status(400).json({
+            status: 'error',
             message: 'Validation Error',
             errors: Object.values(err.errors).map(e => e.message)
         });
     }
 
-    res.status(500).json({
-        message: 'Internal Server Error',
-        error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    if (err.code === 11000) {
+        return res.status(400).json({
+            status: 'error',
+            message: 'Duplicate Key Error',
+            field: Object.keys(err.keyPattern)[0]
+        });
+    }
+
+    res.status(err.status || 500).json({
+        status: 'error',
+        message: process.env.NODE_ENV === 'development' ? err.message : 'Internal Server Error',
+        stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
     });
 });
 
 /**
  * Database Connection and Server Initialization
- * Connects to MongoDB and starts the Express server
- * - Uses MongoDB's default port 27017
- * - Implements connection error handling
- * - Logs server endpoints upon successful start
  */
-mongoose.connect('mongodb://localhost:27017/trackingserver', {
+mongoose.connect(MONGODB_URI, {
     useNewUrlParser: true,
     useUnifiedTopology: true
 })
@@ -103,8 +116,7 @@ mongoose.connect('mongodb://localhost:27017/trackingserver', {
     
     app.listen(PORT, () => {
         console.log(`Server is running on http://localhost:${PORT}`);
-        console.log(`Login page available at http://localhost:${PORT}`);
-        console.log(`Tracking page available at http://localhost:${PORT}/tracking`);
+        console.log('Environment:', process.env.NODE_ENV || 'development');
     });
 })
 .catch(err => {
@@ -114,7 +126,6 @@ mongoose.connect('mongodb://localhost:27017/trackingserver', {
 
 /**
  * Process Event Handlers
- * Handle various process events for graceful shutdown and error reporting
  */
 
 // Handle graceful shutdown
@@ -142,3 +153,5 @@ process.on('unhandledRejection', (reason, promise) => {
         process.exit(1);
     });
 });
+
+module.exports = app;
