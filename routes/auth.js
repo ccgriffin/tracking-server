@@ -2,6 +2,7 @@ const express = require('express');
 const isAuthenticated = require('../middleware/auth');
 const User = require('../models/User');
 const TrackerData = require('../models/TrackerData');
+const { logger } = require('../middleware/logger');
 
 const router = express.Router();
 
@@ -9,6 +10,59 @@ const router = express.Router();
  * Authentication Routes
  * @module routes/auth
  */
+
+/**
+ * @typedef {Object} RegisterRequest
+ * @property {string} username - User's username
+ * @property {string} email - User's email
+ * @property {string} password - User's password
+ */
+
+/**
+ * Register endpoint - Creates a new user account
+ * @route POST /api/auth/register
+ * @param {RegisterRequest} req.body - Registration details
+ * @returns {Object} 201 - Success response with user created
+ * @returns {Object} 400 - Validation error
+ * @returns {Object} 409 - Username/email already exists
+ * @throws {Error} 500 - Server error
+ */
+router.post('/register', async (req, res, next) => {
+    try {
+        const { username, email, password } = req.body;
+
+        // Check if username or email already exists
+        const existingUser = await User.findOne({
+            $or: [{ username }, { email }]
+        });
+
+        if (existingUser) {
+            return res.status(409).json({
+                message: existingUser.username === username ? 
+                    'Username already exists' : 
+                    'Email already registered'
+            });
+        }
+
+        // Create new user
+        const user = new User({
+            username,
+            email,
+            password,
+            trackers: []
+        });
+
+        await user.save();
+        logger.info(`New user registered: ${username}`);
+
+        res.status(201).json({
+            message: 'Registration successful'
+        });
+    } catch (error) {
+        logger.error('Registration error:', error);
+        next(error);
+    }
+});
 
 /**
  * @typedef {Object} LoginRequest
@@ -34,13 +88,38 @@ router.post('/login', async (req, res, next) => {
         const { username, password } = req.body;
         const user = await User.findOne({ username });
         
-        if (!user || !(await user.comparePassword(password))) {
+        if (!user) {
+            logger.warn(`Login failed: User ${username} not found`);
             return res.status(401).json({ message: 'Invalid username or password' });
         }
 
+        // Check if account is locked
+        if (user.isLocked()) {
+            logger.warn(`Login attempt on locked account: ${username}`);
+            return res.status(401).json({ 
+                message: 'Account is locked due to too many failed attempts. Please try again later.' 
+            });
+        }
+
+        // Verify password
+        const isValid = await user.comparePassword(password);
+        
+        if (!isValid) {
+            // Increment failed attempts
+            await user.incrementLoginAttempts();
+            logger.warn(`Failed login attempt for user: ${username}`);
+            return res.status(401).json({ message: 'Invalid username or password' });
+        }
+
+        // Reset login attempts on successful login
+        await user.resetLoginAttempts();
+        await user.updateLastLogin();
+
         req.session.userId = user._id;
+        logger.info(`User logged in: ${username}`);
         res.json({ message: 'Login successful' });
     } catch (error) {
+        logger.error('Login error:', error);
         next(error);
     }
 });
@@ -51,7 +130,9 @@ router.post('/login', async (req, res, next) => {
  * @returns {Object} 200 - Success response with session destroyed
  */
 router.post('/logout', (req, res) => {
+    const userId = req.session.userId;
     req.session.destroy();
+    logger.info(`User logged out: ${userId}`);
     res.json({ message: 'Logout successful' });
 });
 
@@ -81,7 +162,7 @@ router.post('/logout', (req, res) => {
 router.get('/trackers/last-known-location', async (req, res, next) => {
     try {
         const uniqueTrackers = await TrackerData.distinct('ident');
-        console.log('Found trackers:', uniqueTrackers);
+        logger.debug('Found trackers:', uniqueTrackers);
 
         const lastLocations = await Promise.all(uniqueTrackers.map(async (ident) => {
             const lastLocation = await TrackerData.findOne({ ident })
@@ -105,64 +186,7 @@ router.get('/trackers/last-known-location', async (req, res, next) => {
 
         res.json(lastLocations);
     } catch (error) {
-        next(error);
-    }
-});
-
-/**
- * @typedef {Object} HistoricalDataPoint
- * @property {string} ident - Tracker identifier
- * @property {string} deviceName - Name of the tracking device
- * @property {Object} position - Position information
- * @property {number} position.latitude - Geographic latitude
- * @property {number} position.longitude - Geographic longitude
- * @property {number} position.speed - Current speed
- * @property {Date} timestamp - Time of data recording
- * @property {number} batteryLevel - Battery level at time of recording
- * @property {boolean} ignition - Engine ignition status
- */
-
-/**
- * @typedef {Object} HistoricalData
- * @property {string} date - ISO date string
- * @property {HistoricalDataPoint[]} data - Array of tracking data points for the date
- */
-
-/**
- * Get historical tracking data grouped by date
- * @route GET /api/auth/trackers/history
- * @returns {Object.<string, HistoricalDataPoint[]>} 200 - Historical tracking data grouped by date
- * @throws {Error} 500 - Server error
- */
-router.get('/trackers/history', async (req, res, next) => {
-    try {
-        const historicalData = await TrackerData.find({})
-            .sort({ timestamp: -1 })
-            .select('ident position.latitude position.longitude timestamp device.name battery.level engine.ignition.status position.speed')
-            .lean();
-
-        const groupedData = {};
-        historicalData.forEach(data => {
-            const date = new Date(data.timestamp).toISOString().split('T')[0];
-            if (!groupedData[date]) {
-                groupedData[date] = [];
-            }
-            groupedData[date].push({
-                ident: data.ident,
-                deviceName: data.device?.name || data.ident,
-                position: {
-                    latitude: data.position.latitude,
-                    longitude: data.position.longitude,
-                    speed: data.position.speed
-                },
-                timestamp: data.timestamp,
-                batteryLevel: data.battery?.level,
-                ignition: data.engine?.ignition?.status
-            });
-        });
-
-        res.json(groupedData);
-    } catch (error) {
+        logger.error('Error fetching last known locations:', error);
         next(error);
     }
 });

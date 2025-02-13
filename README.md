@@ -12,16 +12,56 @@ A real-time GPS tracking server application with support for multiple devices an
 - Comprehensive logging
 - Error tracking and monitoring
 - Role-based access control
+- Dark mode support
 
-## Deployment Guide
+## Quick Start with Docker
 
-### Prerequisites
-- Node.js >= 14.0.0
-- MongoDB >= 4.4
-- Docker (optional)
-- Docker Compose (optional)
+The easiest way to get started is using the pre-built Docker image from Docker Hub:
 
-### Local Development
+```bash
+# Pull the image
+docker pull c43211/tracking-server:latest
+
+# Run the container
+docker run -d \
+  --name tracking-server \
+  -p 3000:3000 \
+  -e MONGODB_URI=mongodb://your-mongodb-uri \
+  -e SESSION_SECRET=your-session-secret \
+  c43211/tracking-server:latest
+```
+
+Or using Docker Compose:
+
+```yaml
+version: '3.8'
+services:
+  tracking-server:
+    image: c43211/tracking-server:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - MONGODB_URI=mongodb://mongodb:27017/trackingserver
+      - SESSION_SECRET=your-session-secret
+    depends_on:
+      - mongodb
+  
+  mongodb:
+    image: mongo:latest
+    volumes:
+      - mongodb_data:/data/db
+
+volumes:
+  mongodb_data:
+```
+
+Save this as `docker-compose.yml` and run:
+```bash
+docker-compose up -d
+```
+
+## Local Development
+
 1. Clone the repository
 2. Install dependencies:
    ```bash
@@ -36,71 +76,17 @@ A real-time GPS tracking server application with support for multiple devices an
    npm run dev
    ```
 
-### Docker Deployment
-1. Build and run with Docker Compose:
-   ```bash
-   # Start the application
-   docker-compose up -d
+## Environment Variables
 
-   # View logs
-   docker-compose logs -f
+| Variable | Description | Default |
+|----------|-------------|---------|
+| PORT | Server port | 3000 |
+| NODE_ENV | Environment mode | development |
+| MONGODB_URI | MongoDB connection string | mongodb://localhost:27017/trackingserver |
+| SESSION_SECRET | Session encryption key | your_secret_key |
+| JWT_SECRET | JWT signing key | your_jwt_secret_key |
 
-   # Stop the application
-   docker-compose down
-   ```
-
-### Cloud Deployment Options
-
-#### Heroku
-1. Install Heroku CLI and login:
-   ```bash
-   heroku login
-   ```
-2. Create new Heroku app:
-   ```bash
-   heroku create your-app-name
-   ```
-3. Add MongoDB addon:
-   ```bash
-   heroku addons:create mongolab
-   ```
-4. Configure environment variables:
-   ```bash
-   heroku config:set NODE_ENV=production
-   heroku config:set SESSION_SECRET=your-secret-key
-   ```
-5. Deploy:
-   ```bash
-   git push heroku main
-   ```
-
-#### Digital Ocean App Platform
-1. Fork this repository to your GitHub account
-2. Connect your GitHub account to Digital Ocean
-3. Create a new app from your repository
-4. Configure environment variables:
-   - `NODE_ENV=production`
-   - `SESSION_SECRET=your-secret-key`
-   - `MONGODB_URI` (from MongoDB Atlas or managed database)
-5. Deploy the application
-
-#### AWS Elastic Beanstalk
-1. Install AWS EB CLI
-2. Initialize EB application:
-   ```bash
-   eb init
-   ```
-3. Create environment:
-   ```bash
-   eb create
-   ```
-4. Configure environment variables in EB Console
-5. Deploy:
-   ```bash
-   eb deploy
-   ```
-
-### Security Features
+## Security Features
 
 1. Authentication & Authorization
    - Session-based authentication
@@ -113,7 +99,7 @@ A real-time GPS tracking server application with support for multiple devices an
    - Rate limiting
    - CORS protection
    - XSS prevention
-   - Security headers (via Helmet)
+   - Security headers
    - Request size limiting
 
 3. Logging & Monitoring
@@ -122,65 +108,20 @@ A real-time GPS tracking server application with support for multiple devices an
    - Request logging
    - Security event logging
 
-### Production Considerations
+## API Documentation
 
-1. Database
-   - Use MongoDB Atlas or a managed database service
-   - Enable database backups
-   - Configure proper authentication and network security
+### Authentication Endpoints
 
-2. Security
-   - Set strong SESSION_SECRET
-   - Enable HTTPS
-   - Configure proper CORS settings
-   - Implement rate limiting
-   - Regular security updates
+- `POST /api/auth/login` - User login
+- `POST /api/auth/logout` - User logout
 
-3. Monitoring
-   - Set up application monitoring
-   - Configure error tracking
-   - Enable performance monitoring
-   - Set up alerts for critical issues
+### Tracker Endpoints
 
-4. Scaling
-   - Use load balancer for multiple instances
-   - Configure auto-scaling rules
-   - Optimize database queries
-   - Implement caching where appropriate
+- `GET /api/tracker/last-known-location` - Get last known locations
+- `GET /api/tracker/history` - Get historical tracking data
+- `POST /api/tracker/data` - Submit tracking data
 
-### Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| PORT | Server port | 3000 |
-| NODE_ENV | Environment mode | development |
-| MONGODB_URI | MongoDB connection string | mongodb://localhost:27017/trackingserver |
-| SESSION_SECRET | Session encryption key | your_secret_key |
-| JWT_SECRET | JWT signing key | your_jwt_secret_key |
-
-### Health Checks
-
-The application provides health check endpoints:
-- `/health` - Basic application health
-- `/api/health` - API health status
-
-### Backup and Recovery
-
-1. Database Backups:
-   ```bash
-   # Using mongodump
-   mongodump --uri="your-mongodb-uri" --out=backup/
-
-   # Restore
-   mongorestore --uri="your-mongodb-uri" backup/
-   ```
-
-2. Application Data:
-   - All data is stored in MongoDB
-   - Docker volumes persist data between container restarts
-   - Regular backups recommended
-
-### Support
+## Support
 
 For issues and support:
 1. Check the [issues](https://github.com/ccgriffin/tracking-server/issues) section

@@ -4,27 +4,21 @@ const mongoose = require('mongoose');
 const path = require('path');
 const { securityMiddleware } = require('./middleware/security');
 const { morganMiddleware, requestLogger, errorLogger } = require('./middleware/logger');
+const { isAuthenticated } = require('./middleware/auth');
 const trackerRoutes = require('./routes/tracker');
 const authRoutes = require('./routes/auth');
-
-/**
- * Main Server Application
- * @module server
- */
+const adminRoutes = require('./routes/admin');
 
 const app = express();
 
-// Apply security middleware (helmet, cors, rate limiting, etc.)
+// Apply security middleware
 securityMiddleware(app);
 
 // Apply logging middleware
 app.use(morganMiddleware);
 app.use(requestLogger);
 
-/**
- * Session Configuration
- * Configures express-session middleware for user authentication
- */
+// Session Configuration
 app.use(session({
     secret: process.env.SESSION_SECRET || 'your_secret_key',
     resave: false,
@@ -40,32 +34,33 @@ app.use(session({
 const PORT = process.env.PORT || 3000;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/trackingserver';
 
-/**
- * Middleware Configuration
- */
-app.use(express.json({ limit: '10kb' })); // Body size limiting
+// Middleware Configuration
+app.use(express.json({ limit: '10kb' }));
 app.use(express.static('public'));
 
-/**
- * API Routes Configuration
- */
-app.use('/api/tracker', trackerRoutes);
+// API Routes Configuration
+app.use('/api/tracker', isAuthenticated, trackerRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/admin', isAuthenticated, adminRoutes); // Admin routes require authentication
 
-/**
- * Serve static pages
- */
+// Serve static pages
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
 
-app.get('/tracking', (req, res) => {
+app.get('/tracking', isAuthenticated, (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'tracking.html'));
 });
 
-/**
- * Health check endpoint
- */
+app.get('/admin', isAuthenticated, async (req, res) => {
+    // Check if user is admin
+    if (req.user.role !== 'admin') {
+        return res.redirect('/tracking');
+    }
+    res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+
+// Health check endpoint
 app.get('/health', (req, res) => {
     res.status(200).json({
         status: 'healthy',
@@ -74,9 +69,7 @@ app.get('/health', (req, res) => {
     });
 });
 
-/**
- * Global Error Handler
- */
+// Global Error Handler
 app.use(errorLogger);
 app.use((err, req, res, next) => {
     console.error('Error:', err);
@@ -104,9 +97,7 @@ app.use((err, req, res, next) => {
     });
 });
 
-/**
- * Database Connection and Server Initialization
- */
+// Database Connection and Server Initialization
 mongoose.connect(MONGODB_URI, {
     useNewUrlParser: true,
     useUnifiedTopology: true
@@ -124,11 +115,7 @@ mongoose.connect(MONGODB_URI, {
     process.exit(1);
 });
 
-/**
- * Process Event Handlers
- */
-
-// Handle graceful shutdown
+// Process Event Handlers
 process.on('SIGINT', () => {
     mongoose.connection.close(() => {
         console.log('MongoDB connection closed through app termination');
@@ -136,7 +123,6 @@ process.on('SIGINT', () => {
     });
 });
 
-// Handle uncaught exceptions
 process.on('uncaughtException', (err) => {
     console.error('Uncaught Exception:', err);
     mongoose.connection.close(() => {
@@ -145,7 +131,6 @@ process.on('uncaughtException', (err) => {
     });
 });
 
-// Handle unhandled promise rejections
 process.on('unhandledRejection', (reason, promise) => {
     console.error('Unhandled Rejection at:', promise, 'reason:', reason);
     mongoose.connection.close(() => {
