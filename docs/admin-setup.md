@@ -1,5 +1,12 @@
 # Setting Up Admin Users
 
+This guide explains how to set up anLet's update the `docs/admin-setup.md` to include the usage of the `setAdmin.js` script:
+
+<create_file>
+<path>docs/admin-setup.md</path>
+<content>
+# Setting Up Admin Users
+
 This guide explains how to set up and manage admin users in the GPS Tracking Server.
 
 ## Method 1: Using MongoDB Shell
@@ -29,7 +36,9 @@ db.users.updateOne(
 
 ## Method 2: Using the Setup Script
 
-1. Create a setup file (e.g., `scripts/setAdmin.js`):
+1. The `setAdmin.js` script is included in the Docker image. You can use it to promote a user to admin status.
+
+2. Create a setup file (e.g., `scripts/setAdmin.js`):
 ```javascript
 const mongoose = require('mongoose');
 const User = require('../models/User');
@@ -59,13 +68,20 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/trackings
     });
 ```
 
-2. Run the script:
+3. Run the script:
 ```bash
-# If using Node directly
-node scripts/setAdmin.js username
-
 # If using Docker Compose
 docker compose exec tracking-server node scripts/setAdmin.js username
+
+# If using standalone container
+docker exec tracking-server node scripts/setAdmin.js username
+```
+
+Replace `username` with the actual username you want to promote.
+
+Example output:
+```
+User admin1 is now an admin
 ```
 
 ## Method 3: Using Docker Environment
@@ -81,26 +97,6 @@ services:
       - ADMIN_USERNAME=admin
       - ADMIN_PASSWORD=your-secure-password
       - ADMIN_EMAIL=admin@example.com
-```
-
-## Method 4: Using the Admin API
-
-1. First, log in as an existing admin:
-```bash
-curl -X POST http://your-server:3000/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username": "admin", "password": "your-password"}'
-```
-
-2. Use the returned token to promote a user to admin:
-```bash
-curl -X PUT http://your-server:3000/api/admin/users/role \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your-token" \
-  -d '{
-    "username": "user-to-promote",
-    "role": "admin"
-  }'
 ```
 
 ## Verifying Admin Status
