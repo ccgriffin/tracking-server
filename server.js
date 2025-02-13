@@ -37,7 +37,7 @@ const PORT = process.env.PORT || 3000;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/trackingserver';
 
 // Middleware Configuration
-app.use(express.json({ limit: '1mb' })); // Increase limit to 1mb
+app.use(express.json({ limit: '50mb' })); // Increased limit to 50mb
 
 // Serve static files with explicit MIME types
 app.use(express.static('public', {
