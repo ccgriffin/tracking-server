@@ -6,7 +6,7 @@
     <title>GPS Tracking - Login</title>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
     <div class="login-container">
@@ -59,7 +59,7 @@
                 </button>
 
                 <div class="form-footer">
-                    Don't have an account? <a href="/register.html">Sign Up</a>
+                    Don't have an account? <a href="./register.html">Sign Up</a>
                 </div>
             </form>
 
@@ -80,7 +80,7 @@
                 button.innerHTML = '<i class="fas fa-circle-notch loading"></i><span>Signing In...</span>';
                 button.disabled = true;
                 
-                const response = await fetch('/api/auth/login', {
+                const response = await fetch('./api/auth/login', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -98,7 +98,7 @@
                     // Smooth transition
                     document.body.style.opacity = '0';
                     setTimeout(() => {
-                        window.location.href = '/tracking';
+                        window.location.href = './tracking';
                     }, 500);
                 } else {
                     const message = document.getElementById('message');
