@@ -1,4 +1,7 @@
 /* Modern UI Styles */
+
+/* Base Variables */
+
 :root {
     --primary-color: #4f46e5;
     --primary-dark: #4338ca;
@@ -151,6 +154,53 @@ body {
 }
 
 /* Tracking Dashboard Styles */
+.app-container {
+    min-height: 100vh;
+    background: var(--background-color);
+    padding: 1rem;
+}
+
+.top-nav {
+    background: var(--card-bg);
+    padding: 1rem;
+    border-radius: 0.75rem;
+    margin-bottom: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: var(--shadow-md);
+    border: 1px solid var(--border-color);
+}
+
+.nav-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.logo-icon {
+    width: 32px;
+    height: 32px;
+    color: var(--primary-color);
+}
+
+.nav-brand h1 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0;
+}
+
+.nav-controls {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.nav-controls .button {
+    min-width: 100px;
+    justify-content: center;
+}
+
 .dashboard-container {
     display: grid;
     grid-template-columns: 1fr 350px;
@@ -270,30 +320,55 @@ body {
 
 .device-card {
     background: var(--card-bg);
-    padding: 1.25rem;
+    padding: 1.5rem;
     border-radius: 0.75rem;
     border: 1px solid var(--border-color);
     margin-bottom: 1rem;
     transition: var(--transition);
     cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
 }
 
 .device-card:hover {
-    transform: translateX(4px);
+    transform: translateY(-2px);
     box-shadow: var(--shadow-md);
+    border-color: var(--primary-color);
 }
 
 .device-card.selected {
+    background: linear-gradient(135deg, rgba(79, 70, 229, 0.05) 0%, rgba(147, 51, 234, 0.05) 100%);
     border: 2px solid var(--primary-color);
-    background-color: rgba(79, 70, 229, 0.1);
+    box-shadow: var(--shadow-md);
+}
+
+.device-card.status-active {
+    border-left: 4px solid var(--success-color);
+}
+
+.device-card.status-inactive {
+    border-left: 4px solid var(--danger-color);
 }
 
 .device-card .device-actions {
-    pointer-events: none;
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
 }
 
 .device-card .device-actions button {
-    pointer-events: all;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: var(--transition);
+}
+
+.device-card .device-actions button:hover {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
 }
 
 .device-header {
@@ -301,26 +376,81 @@ body {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.device-header h4 {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0;
+    font-size: 1.125rem;
+}
+
+.device-header h4 i {
+    color: var(--primary-color);
+}
+
+.device-header .status-badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 1rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    background: var(--background-color);
+}
+
+.status-active .status-badge {
+    background: var(--success-color);
+    color: white;
+}
+
+.status-inactive .status-badge {
+    background: var(--danger-color);
+    color: white;
 }
 
 .device-metrics {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 0.75rem;
-    margin-bottom: 1rem;
-}
-
-.metric {
-    background: var(--background-color);
+    margin: 1rem 0;
     padding: 0.75rem;
-    border-radius: 0.5rem;
-    text-align: center;
+    border-radius: 0.75rem;
+    background: linear-gradient(135deg, rgba(79, 70, 229, 0.05) 0%, rgba(147, 51, 234, 0.05) 100%);
 }
 
-.metric i {
-    font-size: 1.25rem;
+.device-metrics .metric {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1rem;
+    border-radius: 0.75rem;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
+    transition: var(--transition);
+}
+
+.device-metrics .metric:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--primary-color);
+}
+
+.device-metrics .metric i {
+    font-size: 1.5rem;
+    color: var(--primary-color);
     margin-bottom: 0.25rem;
 }
+
+.device-metrics .metric span {
+    font-weight: 500;
+    color: var(--text-color);
+}
+
+
 
 .pagination-controls {
     display: flex;
