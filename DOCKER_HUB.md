@@ -18,18 +18,17 @@ The official Docker image is available at [hub.docker.com/r/c43211/tracking-serv
 - 👥 Role-based access control
 - 🌓 Dark mode support
 
-## Quick Start
+## Deployment Options
 
-### Option 1: Using Docker Hub Image
+### Option 1: Using Nginx Reverse Proxy (Recommended)
 
-Create a `docker-compose.yml` file:
-
+1. Create a `docker-compose.yml` file:
 ```yaml
 services:
   tracking-server:
     image: c43211/tracking-server:latest
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"  # Only accessible locally
     environment:
       - NODE_ENV=production
       - MONGODB_URI=mongodb://mongodb:27017/trackingserver
@@ -45,8 +44,6 @@ services:
 
   mongodb:
     image: mongo:latest
-    ports:
-      - "27017:27017"
     volumes:
       - mongodb-data:/data/db
     networks:
@@ -63,46 +60,78 @@ volumes:
   app-logs:
 ```
 
-Then run:
+2. Create an Nginx configuration (e.g., `/etc/nginx/sites-available/tracking-server`):
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name your-domain.com;
+
+    ssl_certificate /path/to/your/fullchain.pem;
+    ssl_certificate_key /path/to/your/privkey.pem;
+
+    # Modern SSL configuration
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;
+    ssl_prefer_server_ciphers off;
+
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
+
+3. Start the services:
 ```bash
 # Create .env file with your secret
 echo "SESSION_SECRET=your-secret-here" > .env
 
-# Pull and start the services
+# Start the services
 docker compose up -d
 ```
 
-### Option 2: Run Individual Container
+### Option 2: Using Apache Reverse Proxy
 
-If you have your own MongoDB instance:
+1. Create a `docker-compose.yml` file (same as above)
 
-```bash
-# Create volumes for data and logs
-docker volume create tracking-data
-docker volume create tracking-logs
+2. Configure Apache:
+```apache
+<VirtualHost *:80>
+    ServerName your-domain.com
+    Redirect permanent / https://your-domain.com/
+</VirtualHost>
 
-# Pull and run the container
-docker pull c43211/tracking-server:latest
+<VirtualHost *:443>
+    ServerName your-domain.com
+    
+    SSLEngine on
+    SSLCertificateFile /path/to/your/fullchain.pem
+    SSLCertificateKeyFile /path/to/your/privkey.pem
 
-docker run -d \
-  --name tracking-server \
-  -p 3000:3000 \
-  -e MONGODB_URI=mongodb://your-mongodb-uri \
-  -e SESSION_SECRET=your-session-secret \
-  -e NODE_ENV=production \
-  -v tracking-data:/usr/src/app/data \
-  -v tracking-logs:/usr/src/app/logs \
-  c43211/tracking-server:latest
+    ProxyPreserveHost On
+    ProxyPass / http://localhost:3000/
+    ProxyPassReverse / http://localhost:3000/
+
+    RequestHeader set X-Forwarded-Proto "https"
+    RequestHeader set X-Forwarded-Port "443"
+</VirtualHost>
 ```
 
-### Option 3: Build from Source
-
-If you prefer to build the image yourself:
-
-1. Clone the repository from [GitHub](https://github.com/ccgriffin/tracking-server)
-2. Build and run:
+3. Start the services:
 ```bash
-docker compose build
 docker compose up -d
 ```
 

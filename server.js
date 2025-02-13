@@ -24,7 +24,8 @@ app.use(session({
     resave: false,
     saveUninitialized: false,
     cookie: {
-        secure: process.env.NODE_ENV === 'production',
+        // Allow non-secure cookies since we're using a reverse proxy
+        secure: false,
         httpOnly: true,
         maxAge: 24 * 60 * 60 * 1000 // 24 hours
     }
@@ -37,6 +38,9 @@ const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/tracki
 // Middleware Configuration
 app.use(express.json({ limit: '10kb' }));
 app.use(express.static('public'));
+
+// Trust first proxy
+app.set('trust proxy', 1);
 
 // API Routes Configuration
 app.use('/api/tracker', auth.isAuthenticated, trackerRoutes);

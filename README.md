@@ -14,67 +14,99 @@ A real-time GPS tracking server application with support for multiple devices an
 - Role-based access control
 - Dark mode support
 
-## Quick Start with Docker
+## Deployment Options
 
-The easiest way to get started is using the pre-built Docker image from Docker Hub:
+### Option 1: Using Nginx Reverse Proxy (Recommended)
+
+1. Create an Nginx configuration file (e.g., `/etc/nginx/sites-available/tracking-server`):
+
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name your-domain.com;
+
+    ssl_certificate /path/to/your/fullchain.pem;
+    ssl_certificate_key /path/to/your/privkey.pem;
+
+    # Modern SSL configuration
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;
+    ssl_prefer_server_ciphers off;
+
+    # HSTS (uncomment if needed)
+    # add_header Strict-Transport-Security "max-age=63072000" always;
+
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
+
+2. Start the tracking server:
+```bash
+docker compose up -d
+```
+
+### Option 2: Using Apache Reverse Proxy
+
+1. Enable required Apache modules:
+```bash
+sudo a2enmod proxy
+sudo a2enmod proxy_http
+sudo a2enmod proxy_wstunnel
+sudo a2enmod ssl
+```
+
+2. Create an Apache configuration file (e.g., `/etc/apache2/sites-available/tracking-server.conf`):
+```apache
+<VirtualHost *:80>
+    ServerName your-domain.com
+    Redirect permanent / https://your-domain.com/
+</VirtualHost>
+
+<VirtualHost *:443>
+    ServerName your-domain.com
+    
+    SSLEngine on
+    SSLCertificateFile /path/to/your/fullchain.pem
+    SSLCertificateKeyFile /path/to/your/privkey.pem
+
+    ProxyPreserveHost On
+    ProxyPass / http://localhost:3000/
+    ProxyPassReverse / http://localhost:3000/
+
+    RequestHeader set X-Forwarded-Proto "https"
+    RequestHeader set X-Forwarded-Port "443"
+
+    ErrorLog ${APACHE_LOG_DIR}/tracking-error.log
+    CustomLog ${APACHE_LOG_DIR}/tracking-access.log combined
+</VirtualHost>
+```
+
+3. Start the tracking server:
+```bash
+docker compose up -d
+```
+
+### Option 3: Direct Deployment (Not Recommended for Production)
 
 ```bash
-# Pull the image
-docker pull c43211/tracking-server:latest
-
-# Run the container
-docker run -d \
-  --name tracking-server \
-  -p 3000:3000 \
-  -e MONGODB_URI=mongodb://your-mongodb-uri \
-  -e SESSION_SECRET=your-session-secret \
-  c43211/tracking-server:latest
+docker compose up -d
 ```
-
-Or using Docker Compose:
-
-```yaml
-version: '3.8'
-services:
-  tracking-server:
-    image: c43211/tracking-server:latest
-    ports:
-      - "3000:3000"
-    environment:
-      - MONGODB_URI=mongodb://mongodb:27017/trackingserver
-      - SESSION_SECRET=your-session-secret
-    depends_on:
-      - mongodb
-  
-  mongodb:
-    image: mongo:latest
-    volumes:
-      - mongodb_data:/data/db
-
-volumes:
-  mongodb_data:
-```
-
-Save this as `docker-compose.yml` and run:
-```bash
-docker-compose up -d
-```
-
-## Local Development
-
-1. Clone the repository
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-3. Copy `.env.example` to `.env` and configure:
-   ```bash
-   cp .env.example .env
-   ```
-4. Start the development server:
-   ```bash
-   npm run dev
-   ```
 
 ## Environment Variables
 
@@ -114,6 +146,7 @@ docker-compose up -d
 
 - `POST /api/auth/login` - User login
 - `POST /api/auth/logout` - User logout
+- `POST /api/auth/register` - User registration
 
 ### Tracker Endpoints
 
