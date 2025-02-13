@@ -33,11 +33,14 @@ function parseRawData(rawData) {
  */
 router.post('/data', async (req, res, next) => {
     try {
+        logger.info('Received Flespi data:', JSON.stringify(req.body));
+
         // Handle raw data format from Flespi
         let trackerDataArray;
         if (req.body.data && typeof req.body.data === 'string') {
             trackerDataArray = parseRawData(req.body.data);
             if (!trackerDataArray) {
+                logger.error('Failed to parse raw data');
                 return res.status(400).json({ message: 'Invalid data format' });
             }
         } else if (Array.isArray(req.body)) {
@@ -46,11 +49,27 @@ router.post('/data', async (req, res, next) => {
             trackerDataArray = [req.body];
         }
 
+        logger.info('Processed tracker data array:', JSON.stringify(trackerDataArray));
+
         const savedData = [];
         for (const data of trackerDataArray) {
+            // Create position object from flattened fields
+            const position = {
+                latitude: data['position.latitude'],
+                longitude: data['position.longitude'],
+                speed: data['position.speed'] || 0,
+                altitude: data['position.altitude'] || 0,
+                direction: data['position.direction'] || 0,
+                satellites: data['position.satellites'] || 0
+            };
+
             // Validate required fields
-            if (!data.ident || !data.timestamp || !data.position) {
-                logger.warn(`Missing required fields in data: ${JSON.stringify(data)}`);
+            if (!data.ident || !data.timestamp || (!position.latitude || !position.longitude)) {
+                logger.warn('Missing required fields:', {
+                    ident: data.ident,
+                    timestamp: data.timestamp,
+                    position: position
+                });
                 continue;
             }
 
@@ -58,37 +77,31 @@ router.post('/data', async (req, res, next) => {
             const trackerData = new TrackerData({
                 ident: data.ident,
                 timestamp: new Date(data.timestamp * 1000), // Convert Unix timestamp to Date
-                position: {
-                    latitude: data.position.latitude,
-                    longitude: data.position.longitude,
-                    speed: data.position.speed,
-                    altitude: data.position.altitude,
-                    direction: data.position.direction,
-                    satellites: data.position.satellites
-                },
+                position: position,
                 battery: {
-                    level: data.battery?.level,
-                    voltage: data.battery?.voltage
+                    level: data['battery.level'],
+                    voltage: data['battery.voltage']
                 },
                 engine: {
                     ignition: {
-                        status: data.engine?.ignition?.status
+                        status: data['engine.ignition.status']
                     }
                 },
                 device: {
-                    id: data.device?.id,
-                    name: data.device?.name,
+                    id: data['device.id'],
+                    name: data['device.name'],
                     type: {
-                        id: data.device?.type?.id
+                        id: data['device.type.id']
                     }
                 },
                 external: {
                     powersource: {
-                        voltage: data.external?.powersource?.voltage
+                        voltage: data['external.powersource.voltage']
                     }
                 }
             });
 
+            logger.info('Saving tracker data:', JSON.stringify(trackerData));
             await trackerData.save();
             savedData.push(trackerData);
             logger.info(`Received data from tracker: ${data.ident}`);
