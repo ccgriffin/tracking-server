@@ -1,5 +1,5 @@
 const express = require('express');
-const isAuthenticated = require('../middleware/auth');
+const auth = require('../middleware/auth');
 const User = require('../models/User');
 const TrackerData = require('../models/TrackerData');
 const { logger } = require('../middleware/logger');
@@ -19,7 +19,7 @@ const router = express.Router();
  * @returns {Object} 400 - Invalid request error
  * @throws {Error} 500 - Server error
  */
-router.post('/add', isAuthenticated, async (req, res, next) => {
+router.post('/add', auth.isAuthenticated, async (req, res, next) => {
     try {
         const { identifier } = req.body;
         
@@ -55,7 +55,7 @@ router.post('/add', isAuthenticated, async (req, res, next) => {
  * @returns {Object} 404 - Tracker not found error
  * @throws {Error} 500 - Server error
  */
-router.delete('/remove/:identifier', isAuthenticated, async (req, res, next) => {
+router.delete('/remove/:identifier', auth.isAuthenticated, async (req, res, next) => {
     try {
         const { identifier } = req.params;
         
@@ -86,7 +86,7 @@ router.delete('/remove/:identifier', isAuthenticated, async (req, res, next) => 
  * @returns {Object} 200 - Success response with user's trackers list
  * @throws {Error} 500 - Server error
  */
-router.get('/list', isAuthenticated, async (req, res, next) => {
+router.get('/list', auth.isAuthenticated, async (req, res, next) => {
     try {
         const trackers = await Promise.all(req.user.trackers.map(async (identifier) => {
             const lastLocation = await TrackerData.findOne({ ident: identifier })
@@ -125,7 +125,7 @@ router.get('/list', isAuthenticated, async (req, res, next) => {
  * @returns {Object} 404 - Tracker not found error
  * @throws {Error} 500 - Server error
  */
-router.get('/history/:identifier', isAuthenticated, async (req, res, next) => {
+router.get('/history/:identifier', auth.isAuthenticated, async (req, res, next) => {
     try {
         const { identifier } = req.params;
         const { start, end } = req.query;

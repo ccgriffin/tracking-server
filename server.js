@@ -4,7 +4,7 @@ const mongoose = require('mongoose');
 const path = require('path');
 const { securityMiddleware } = require('./middleware/security');
 const { morganMiddleware, requestLogger, errorLogger } = require('./middleware/logger');
-const { isAuthenticated } = require('./middleware/auth');
+const auth = require('./middleware/auth');
 const trackerRoutes = require('./routes/tracker');
 const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
@@ -39,20 +39,20 @@ app.use(express.json({ limit: '10kb' }));
 app.use(express.static('public'));
 
 // API Routes Configuration
-app.use('/api/tracker', isAuthenticated, trackerRoutes);
+app.use('/api/tracker', auth.isAuthenticated, trackerRoutes);
 app.use('/api/auth', authRoutes);
-app.use('/api/admin', isAuthenticated, adminRoutes); // Admin routes require authentication
+app.use('/api/admin', auth.isAuthenticated, adminRoutes); // Admin routes require authentication
 
 // Serve static pages
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
 
-app.get('/tracking', isAuthenticated, (req, res) => {
+app.get('/tracking', auth.isAuthenticated, (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'tracking.html'));
 });
 
-app.get('/admin', isAuthenticated, async (req, res) => {
+app.get('/admin', auth.isAuthenticated, async (req, res) => {
     // Check if user is admin
     if (req.user.role !== 'admin') {
         return res.redirect('/tracking');
