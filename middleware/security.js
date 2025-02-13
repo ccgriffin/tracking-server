@@ -18,24 +18,18 @@ const authLimiter = rateLimit({
 });
 
 const securityMiddleware = (app) => {
-    // Set security HTTP headers with HTTPS disabled
+    // Set security HTTP headers with minimal restrictions
     app.use(helmet({
-        contentSecurityPolicy: {
-            directives: {
-                defaultSrc: ["'self'"],
-                scriptSrc: ["'self'", "'unsafe-inline'", "https://unpkg.com", "https://cdnjs.cloudflare.com"],
-                styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdnjs.cloudflare.com", "https://unpkg.com"],
-                fontSrc: ["'self'", "https://fonts.gstatic.com", "https://cdnjs.cloudflare.com"],
-                imgSrc: ["'self'", "data:", "https:", "http:"],
-                connectSrc: ["'self'", "http:", "https:"],
-            }
-        },
-        hsts: false, // Disable HSTS since we're using HTTP
+        contentSecurityPolicy: false,  // Disable CSP
+        crossOriginEmbedderPolicy: false,
+        crossOriginOpenerPolicy: false,
+        crossOriginResourcePolicy: false,
+        hsts: false  // Disable HSTS
     }));
 
     // Enable CORS
     app.use(cors({
-        origin: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : '*',
+        origin: '*',
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
         allowedHeaders: ['Content-Type', 'Authorization'],
         credentials: true
