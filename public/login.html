@@ -4,29 +4,63 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GPS Tracking - Login</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="login-container">
-        <div class="login-header">
-            <i class="fas fa-satellite-dish"></i>
-            <h2>GPS Tracking System</h2>
+        <div class="login-box">
+            <div class="login-header">
+                <div class="logo">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    </svg>
+                </div>
+                <h1>Welcome Back</h1>
+                <p>Sign in to your GPS Tracking account</p>
+            </div>
+
+            <form id="loginForm">
+                <div class="input-group">
+                    <label class="input-label" for="username">Username</label>
+                    <div class="input-field">
+                        <i class="fas fa-user"></i>
+                        <input 
+                            type="text" 
+                            id="username" 
+                            name="username" 
+                            placeholder="Enter your username"
+                            autocomplete="username"
+                            required
+                        >
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label class="input-label" for="password">Password</label>
+                    <div class="input-field">
+                        <i class="fas fa-lock"></i>
+                        <input 
+                            type="password" 
+                            id="password" 
+                            name="password" 
+                            placeholder="Enter your password"
+                            autocomplete="current-password"
+                            required
+                        >
+                    </div>
+                </div>
+
+                <button type="submit" class="submit-button">
+                    <i class="fas fa-sign-in-alt"></i>
+                    <span>Sign In</span>
+                </button>
+            </form>
+
+            <div id="message"></div>
         </div>
-        <form id="loginForm">
-            <div class="input-group">
-                <i class="fas fa-user"></i>
-                <input type="text" id="username" name="username" placeholder="Username" required>
-            </div>
-            <div class="input-group">
-                <i class="fas fa-lock"></i>
-                <input type="password" id="password" name="password" placeholder="Password" required>
-            </div>
-            <button type="submit">
-                <i class="fas fa-sign-in-alt"></i> Login
-            </button>
-        </form>
-        <div id="message"></div>
     </div>
 
     <script>
@@ -36,10 +70,10 @@
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
             const button = e.target.querySelector('button');
-            const originalText = button.innerHTML;
+            const buttonContent = button.innerHTML;
             
             try {
-                button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Logging in...';
+                button.innerHTML = '<i class="fas fa-circle-notch loading"></i><span>Signing In...</span>';
                 button.disabled = true;
                 
                 const response = await fetch('/api/auth/login', {
@@ -53,25 +87,60 @@
                 const data = await response.json();
                 
                 if (response.ok) {
-                    document.getElementById('message').className = 'success-message';
-                    document.getElementById('message').textContent = 'Login successful!';
+                    const message = document.getElementById('message');
+                    message.className = 'message success-message';
+                    message.textContent = 'Login successful! Redirecting...';
+                    
+                    // Smooth transition
+                    document.body.style.opacity = '0';
                     setTimeout(() => {
                         window.location.href = '/tracking';
                     }, 500);
                 } else {
-                    document.getElementById('message').className = 'error-message';
-                    document.getElementById('message').textContent = data.message || 'Login failed';
-                    button.innerHTML = originalText;
+                    const message = document.getElementById('message');
+                    message.className = 'message error-message';
+                    message.textContent = data.message || 'Login failed';
+                    button.innerHTML = buttonContent;
                     button.disabled = false;
+                    
+                    // Shake animation for error
+                    message.style.animation = 'none';
+                    message.offsetHeight; // Trigger reflow
+                    message.style.animation = 'shake 0.5s';
                 }
             } catch (error) {
-                document.getElementById('message').className = 'error-message';
-                document.getElementById('message').textContent = 'An error occurred';
-                button.innerHTML = originalText;
+                const message = document.getElementById('message');
+                message.className = 'message error-message';
+                message.textContent = 'An error occurred. Please try again.';
+                button.innerHTML = buttonContent;
                 button.disabled = false;
                 console.error('Error:', error);
             }
         });
+
+        // Add keypress animation to inputs
+        document.querySelectorAll('input').forEach(input => {
+            input.addEventListener('keypress', function() {
+                this.style.transform = 'scale(0.98)';
+                setTimeout(() => {
+                    this.style.transform = 'scale(1)';
+                }, 50);
+            });
+        });
     </script>
+
+    <style>
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        /* Smooth page transition */
+        body {
+            opacity: 1;
+            transition: opacity 0.3s ease-in-out;
+        }
+    </style>
 </body>
 </html>
