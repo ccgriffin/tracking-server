@@ -5,8 +5,8 @@ This guide explains how to configure Flespi to stream GPS data to your tracking 
 ## Prerequisites
 
 1. A Flespi account (sign up at [flespi.io](https://flespi.io))
-2. Your tracking server deployed and accessible via HTTPS
-3. Authentication credentials for your tracking server
+2. Your tracking server deployed and accessible via HTTP/HTTPS
+3. A GPS tracking device supported by Flespi
 
 ## Configuration Steps
 
@@ -28,59 +28,143 @@ This guide explains how to configure Flespi to stream GPS data to your tracking 
 3. Configure the stream:
    ```
    Name: Tracking Server Stream
-   Target URL: https://your-server.com/api/tracker/data
+   Target URL: http://your-server:3000/api/flespi/data
    Content type: application/json
    ```
 
-4. Configure the data mapping:
-   ```json
-   {
-     "ident": "%.device.id",
-     "timestamp": "%.timestamp",
-     "position": {
-       "latitude": "%.position.latitude",
-       "longitude": "%.position.longitude",
-       "speed": "%.position.speed"
-     },
-     "battery": {
-       "level": "%.battery.level"
-     },
-     "engine": {
-       "ignition": {
-         "status": "%.engine.ignition"
-       }
-     },
-     "external.powersource.voltage": "%.external.powersource.voltage",
-     "device": {
-       "name": "%.device.name"
-     },
-     "server.timestamp": "%.server.timestamp"
-   }
-   ```
+### 3. Data Format
 
-### 3. Set Up Authentication
+The server accepts two data formats from Flespi:
 
-1. Add HTTP headers in stream configuration:
-   ```
-   Authorization: Bearer your-api-token
-   ```
+#### Option 1: Direct JSON Array
 
-2. Enable SSL/TLS verification if your server uses HTTPS
+```json
+[
+  {
+    "ident": "device-id-here",
+    "timestamp": 1234567890,
+    "position": {
+      "latitude": 0.0,
+      "longitude": 0.0,
+      "speed": 0,
+      "altitude": 0,
+      "direction": 0,
+      "satellites": 0
+    },
+    "battery": {
+      "level": 100,
+      "voltage": 4.0
+    },
+    "engine": {
+      "ignition": {
+        "status": false
+      }
+    },
+    "device": {
+      "id": 123,
+      "name": "device-name",
+      "type": {
+        "id": 456
+      }
+    },
+    "external": {
+      "powersource": {
+        "voltage": 12.0
+      }
+    }
+  }
+]
+```
 
-### 4. Testing the Integration
+#### Option 2: Raw HTTP Request Data
 
-1. Register a device in Flespi:
-   - Go to "Devices"
-   - Click "Create device"
-   - Select the channel you created
-   - Enter device identifier
+```json
+{
+  "timestamp": 1234567890.123,
+  "type": 3,
+  "conn": 23,
+  "data": "POST /api/flespi/data HTTP/1.1\r\nHost: track.example.com\r\nContent-Type: application/json\r\n\r\n[{\"battery.level\":100,\"device.id\":123,\"device.name\":\"device-name\",\"position.latitude\":0.0,\"position.longitude\":0.0}]"
+}
+```
 
-2. Monitor data flow:
-   - Use Flespi toolbox to verify device messages
-   - Check stream status in Flespi panel
-   - Verify data reception in your tracking server logs
+### 4. Data Mapping
 
-### 5. Production Configuration
+Configure the stream data mapping:
+
+```json
+{
+  "ident": "%.device.id",
+  "timestamp": "%.timestamp",
+  "position": {
+    "latitude": "%.position.latitude",
+    "longitude": "%.position.longitude",
+    "speed": "%.position.speed",
+    "altitude": "%.position.altitude",
+    "direction": "%.position.direction",
+    "satellites": "%.position.satellites"
+  },
+  "battery": {
+    "level": "%.battery.level",
+    "voltage": "%.battery.voltage"
+  },
+  "engine": {
+    "ignition": {
+      "status": "%.engine.ignition.status"
+    }
+  },
+  "device": {
+    "id": "%.device.id",
+    "name": "%.device.name",
+    "type": {
+      "id": "%.device.type.id"
+    }
+  },
+  "external": {
+    "powersource": {
+      "voltage": "%.external.powersource.voltage"
+    }
+  }
+}
+```
+
+### 5. Testing the Integration
+
+1. Monitor incoming data:
+```bash
+# View server logs
+docker compose logs -f tracking-server
+
+# Check MongoDB data
+docker compose exec mongodb mongosh trackingserver --eval "db.trackerdata.find().sort({timestamp:-1}).limit(1)"
+```
+
+2. Example successful response:
+```json
+{
+  "message": "Data received successfully",
+  "count": 3
+}
+```
+
+### 6. Troubleshooting
+
+1. Check server logs for detailed error messages:
+```bash
+docker compose logs -f tracking-server
+```
+
+2. Common issues:
+   - Missing required fields (ident, timestamp, position)
+   - Invalid data format
+   - Network connectivity issues
+   - Invalid timestamp format
+
+3. Validation errors:
+   - All position fields must be numeric
+   - Battery level must be between 0 and 100
+   - Timestamp must be a valid Unix timestamp
+
+### 7. Production Configuration
 
 1. Set up error notifications:
    ```
@@ -96,94 +180,56 @@ This guide explains how to configure Flespi to stream GPS data to your tracking 
 
 3. Enable stream logging for debugging
 
-## Troubleshooting
+### 8. Data Storage
 
-### Common Issues
+The server stores the following data:
 
-1. Data not reaching server:
-   - Verify stream status in Flespi
-   - Check server logs for incoming requests
-   - Verify authentication headers
-   - Ensure server URL is accessible
+1. Core Fields:
+   - Device identifier
+   - Timestamp
+   - Position (lat/long)
+   - Speed
+   - Altitude
+   - Direction
+   - Satellite count
 
-2. Invalid data format:
-   - Review data mapping configuration
-   - Check device message format
-   - Verify JSON payload structure
+2. Device Info:
+   - Battery level/voltage
+   - Engine status
+   - Device name/ID
+   - External power info
 
-3. Authentication failures:
-   - Confirm API token is valid
-   - Check authorization header format
-   - Verify server authentication settings
+3. Metadata:
+   - Codec information
+   - Event details
+   - Channel info
+   - Protocol data
+   - Server timestamps
 
-### Debugging Tools
+### 9. Best Practices
 
-1. Flespi Toolbox:
-   - View raw device messages
-   - Test stream configuration
-   - Monitor message flow
+1. Data Quality:
+   - Validate GPS coordinates
+   - Check timestamp accuracy
+   - Monitor battery levels
+   - Track device status
 
-2. Stream Logs:
-   - Enable debug logging
-   - Check delivery status
-   - View error messages
+2. Performance:
+   - Use batch updates when possible
+   - Monitor data volume
+   - Set up data retention policies
+   - Configure appropriate indexes
 
-## Best Practices
-
-1. Security:
-   - Use HTTPS for data transmission
-   - Rotate API tokens periodically
-   - Implement IP whitelisting if possible
-
-2. Monitoring:
-   - Set up alerts for stream failures
-   - Monitor message delivery rates
-   - Track data quality metrics
-
-3. Performance:
-   - Optimize message size
-   - Configure appropriate retry settings
-   - Monitor server response times
-
-## Example Configurations
-
-### Basic Stream Configuration
-```json
-{
-  "name": "GPS Tracking Stream",
-  "uri": "https://your-server.com/api/tracker/data",
-  "headers": {
-    "Content-Type": "application/json",
-    "Authorization": "Bearer your-api-token"
-  },
-  "verify_ssl": true,
-  "buffer_size": 1000,
-  "retry_count": 3,
-  "retry_delay": 60
-}
-```
-
-### Advanced Data Mapping
-```json
-{
-  "custom_fields": {
-    "device_info": {
-      "serial": "%.device.serial",
-      "model": "%.device.model",
-      "firmware": "%.device.firmware"
-    },
-    "telemetry": {
-      "odometer": "%.position.odometer",
-      "fuel": "%.engine.fuel.level",
-      "temperature": "%.sensors.temperature"
-    }
-  }
-}
-```
+3. Security:
+   - Use HTTPS in production
+   - Monitor for unusual patterns
+   - Set up alerts for device issues
+   - Regular backup of tracking data
 
 ## Support
 
-For additional support:
-1. Flespi Documentation: [docs.flespi.io](https://docs.flespi.io)
-2. Tracking Server Issues: Create a GitHub issue
-3. Email Support: Contact your system administrator
+For additional assistance:
+1. Check server logs for detailed error messages
+2. Review Flespi documentation at [docs.flespi.io](https://docs.flespi.io)
+3. Contact system administrator
+4. Create GitHub issue for bugs
