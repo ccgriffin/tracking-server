@@ -51,9 +51,10 @@ app.use(express.static('public', {
 app.set('trust proxy', 1);
 
 // API Routes Configuration
-app.use('/api/tracker', auth.isAuthenticated, trackerRoutes);
+app.use('/api/tracker/data', trackerRoutes); // Flespi data endpoint (no auth)
+app.use('/api/tracker', auth.isAuthenticated, trackerRoutes); // Protected tracker endpoints
 app.use('/api/auth', authRoutes);
-app.use('/api/admin', auth.isAuthenticated, adminRoutes); // Admin routes require authentication
+app.use('/api/admin', auth.isAuthenticated, adminRoutes);
 
 // Serve static pages
 app.get('/', (req, res) => {
