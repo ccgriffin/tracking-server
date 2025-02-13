@@ -2,6 +2,10 @@
 
 A secure and scalable GPS tracking server built with Node.js, Express, and MongoDB. Perfect for fleet management, asset tracking, and IoT applications.
 
+## Docker Hub Repository
+
+The official Docker image is available at [hub.docker.com/r/c43211/tracking-server](https://hub.docker.com/r/c43211/tracking-server)
+
 ## Key Features
 
 - 🛰️ Real-time GPS tracking
@@ -16,41 +20,82 @@ A secure and scalable GPS tracking server built with Node.js, Express, and Mongo
 
 ## Quick Start
 
-```bash
-# Pull the image
-docker pull c43211/tracking-server:latest
+### Option 1: Using Docker Hub Image
 
-# Run with basic configuration
-docker run -d \
-  --name tracking-server \
-  -p 3000:3000 \
-  -e MONGODB_URI=mongodb://your-mongodb-uri \
-  -e SESSION_SECRET=your-session-secret \
-  c43211/tracking-server:latest
-```
-
-## Docker Compose
+Create a `docker-compose.yml` file:
 
 ```yaml
-version: '3.8'
 services:
   tracking-server:
     image: c43211/tracking-server:latest
     ports:
       - "3000:3000"
     environment:
+      - NODE_ENV=production
       - MONGODB_URI=mongodb://mongodb:27017/trackingserver
-      - SESSION_SECRET=your-session-secret
+      - SESSION_SECRET=${SESSION_SECRET}
     depends_on:
       - mongodb
-  
+    restart: unless-stopped
+    networks:
+      - app-network
+    volumes:
+      - app-data:/usr/src/app/data
+
   mongodb:
     image: mongo:latest
+    ports:
+      - "27017:27017"
     volumes:
-      - mongodb_data:/data/db
+      - mongodb-data:/data/db
+    networks:
+      - app-network
+    restart: unless-stopped
+
+networks:
+  app-network:
+    driver: bridge
 
 volumes:
-  mongodb_data:
+  mongodb-data:
+  app-data:
+```
+
+Then run:
+```bash
+# Create .env file with your secret
+echo "SESSION_SECRET=your-secret-here" > .env
+
+# Pull and start the services
+docker compose up -d
+```
+
+### Option 2: Run Individual Container
+
+If you have your own MongoDB instance:
+
+```bash
+# Pull and run the container
+docker pull c43211/tracking-server:latest
+
+docker run -d \
+  --name tracking-server \
+  -p 3000:3000 \
+  -e MONGODB_URI=mongodb://your-mongodb-uri \
+  -e SESSION_SECRET=your-session-secret \
+  -e NODE_ENV=production \
+  c43211/tracking-server:latest
+```
+
+### Option 3: Build from Source
+
+If you prefer to build the image yourself:
+
+1. Clone the repository from [GitHub](https://github.com/ccgriffin/tracking-server)
+2. Build and run:
+```bash
+docker compose build
+docker compose up -d
 ```
 
 ## Environment Variables
