@@ -41,6 +41,7 @@ services:
       - app-network
     volumes:
       - app-data:/usr/src/app/data
+      - app-logs:/usr/src/app/logs
 
   mongodb:
     image: mongo:latest
@@ -59,6 +60,7 @@ networks:
 volumes:
   mongodb-data:
   app-data:
+  app-logs:
 ```
 
 Then run:
@@ -75,6 +77,10 @@ docker compose up -d
 If you have your own MongoDB instance:
 
 ```bash
+# Create volumes for data and logs
+docker volume create tracking-data
+docker volume create tracking-logs
+
 # Pull and run the container
 docker pull c43211/tracking-server:latest
 
@@ -84,6 +90,8 @@ docker run -d \
   -e MONGODB_URI=mongodb://your-mongodb-uri \
   -e SESSION_SECRET=your-session-secret \
   -e NODE_ENV=production \
+  -v tracking-data:/usr/src/app/data \
+  -v tracking-logs:/usr/src/app/logs \
   c43211/tracking-server:latest
 ```
 
@@ -105,6 +113,13 @@ docker compose up -d
 - `MONGODB_URI` - MongoDB connection string
 - `SESSION_SECRET` - Session encryption key
 - `JWT_SECRET` - JWT signing key
+
+## Volumes
+
+The application uses three Docker volumes:
+- `app-data`: For persistent application data
+- `app-logs`: For application logs
+- `mongodb-data`: For MongoDB data
 
 ## Security Features
 

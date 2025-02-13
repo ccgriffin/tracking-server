@@ -16,12 +16,15 @@ RUN npm ci --only=production
 # Bundle app source
 COPY . .
 
-# Create volume for persistent data
-VOLUME ["/usr/src/app/data"]
+# Create volume for persistent data and logs
+VOLUME ["/usr/src/app/data", "/usr/src/app/logs"]
+
+# Create logs directory and set permissions
+RUN mkdir -p /usr/src/app/logs && \
+    chown -R node:node /usr/src/app/logs
 
 # Add security measures
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
-USER appuser
+USER node
 
 # Expose port
 EXPOSE 3000

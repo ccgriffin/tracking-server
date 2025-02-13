@@ -16,6 +16,7 @@ services:
       - app-network
     volumes:
       - app-data:/usr/src/app/data
+      - app-logs:/usr/src/app/logs
 
   mongodb:
     image: mongo:latest
@@ -34,3 +35,4 @@ networks:
 volumes:
   mongodb-data:
   app-data:
+  app-logs:
