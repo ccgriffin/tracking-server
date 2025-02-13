@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPS Tracking Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+</head>
+<body>
+    <div class="controls">
+        <div class="control-group">
+            <button id="refreshButton">
+                <i class="fas fa-sync-alt"></i> Refresh
+            </button>
+            <div class="dropdown">
+                <button id="filterDevicesButton">
+                    <i class="fas fa-filter"></i> Filter Devices
+                </button>
+                <div class="dropdown-content" id="deviceFilterMenu">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+            <button id="exportDataButton">
+                <i class="fas fa-file-export"></i> Export
+            </button>
+            <button id="showHistoryButton">
+                <i class="fas fa-history"></i> History
+            </button>
+            <button id="logoutButton">
+                <i class="fas fa-sign-out-alt"></i> Logout
+            </button>
+        </div>
+        <div class="date-controls">
+            <div class="date-input">
+                <i class="fas fa-calendar"></i>
+                <input type="date" id="startDate" title="Start Date">
+            </div>
+            <div class="date-input">
+                <i class="fas fa-calendar"></i>
+                <input type="date" id="endDate" title="End Date">
+            </div>
+            <div class="interval-select">
+                <i class="fas fa-clock"></i>
+                <select id="intervalSelect" title="Data Interval">
+                    <option value="raw">Raw Data</option>
+                    <option value="minute">Per Minute</option>
+                    <option value="hour">Per Hour</option>
+                    <option value="day">Per Day</option>
+                </select>
+            </div>
+            <button id="filterButton">
+                <i class="fas fa-filter"></i> Filter
+            </button>
+            <button id="showTrailButton">
+                <i class="fas fa-route"></i> Show Trail
+            </button>
+        </div>
+    </div>
+    
+    <div class="dashboard-container">
+        <div class="main-content">
+            <div class="stats-overview">
+                <div class="stat-card">
+                    <i class="fas fa-satellite"></i>
+                    <div class="stat-info">
+                        <span class="stat-label">Active Devices</span>
+                        <span class="stat-value" id="activeDevicesCount">0</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <i class="fas fa-car"></i>
+                    <div class="stat-info">
+                        <span class="stat-label">Moving Devices</span>
+                        <span class="stat-value" id="movingDevicesCount">0</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <div class="stat-info">
+                        <span class="stat-label">Low Battery</span>
+                        <span class="stat-value" id="lowBatteryCount">0</span>
+                    </div>
+                </div>
+            </div>
+            <div id="map"></div>
+        </div>
+        
+        <div id="deviceInfo">
+            <div class="section-header">
+                <i class="fas fa-satellite"></i>
+                <h3>Device Information</h3>
+                <div class="view-toggle">
+                    <button id="listViewButton" class="active">
+                        <i class="fas fa-list"></i>
+                    </button>
+                    <button id="gridViewButton">
+                        <i class="fas fa-th"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="device-filters">
+                <button class="filter-btn active" data-filter="all">All</button>
+                <button class="filter-btn" data-filter="active">Active</button>
+                <button class="filter-btn" data-filter="inactive">Inactive</button>
+            </div>
+            <div id="deviceDetails"></div>
+            <div class="pagination-controls">
+                <button id="prevPage" onclick="changePage(-1)" disabled>
+                    <i class="fas fa-chevron-left"></i> Previous
+                </button>
+                <div class="pagination-info">
+                    Page <span id="currentPageNum">1</span> of <span id="totalPagesNum">1</span>
+                </div>
+                <button id="nextPage" onclick="changePage(1)" disabled>
+                    Next <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let map;
+        let markers = {};
+        let polylines = {};
+        let isHistoryMode = false;
+        let refreshInterval;
+        let selectedDevices = new Set(); // For device filtering
+        let viewMode = 'list'; // 'list' or 'grid'
+        
+        // Constants
+        const INACTIVE_THRESHOLD = 30 * 60 * 1000; // 30 minutes in milliseconds
+        const LOW_BATTERY_THRESHOLD = 20; // 20%
+        const MOVING_SPEED_THRESHOLD = 5; // 5 mph
+        
+        // Convert km/h to mph
+        function kmhToMph(kmh) {
+            return (kmh * 0.621371).toFixed(1);
+        }
+
+        function startAutoRefresh() {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+            refreshInterval = setInterval(fetchLastLocations, 30000);
+        }
+
+        function stopAutoRefresh() {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+                refreshInterval = null;
+            }
+        }
+
+        function initMap() {
+            map = L.map('map').setView([52.5200, 13.4050], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+        }
+
+        async function fetchLastLocations() {
+            try {
+                const button = document.getElementById('refreshButton');
+                const originalText = button.innerHTML;
+                button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refreshing...';
+                button.disabled = true;
+
+                const response = await fetch('/api/tracker/last-known-location');
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        window.location.href = '/login';
+                        return;
+                    }
+                    throw new Error('Failed to fetch locations');
+                }
+                const locations = await response.json();
+                updateMarkers(locations);
+                updateDeviceInfo(locations);
+
+                button.innerHTML = originalText;
+                button.disabled = false;
+            } catch (error) {
+                console.error('Error:', error);
+                button.innerHTML = originalText;
+                button.disabled = false;
+            }
+        }
+
+        function updateMarkers(locations) {
+            Object.values(markers).forEach(marker => map.removeLayer(marker));
+            markers = {};
+
+            locations.forEach(loc => {
+                if (loc.lastLocation) {
+                    const marker = L.marker([
+                        loc.lastLocation.latitude,
+                        loc.lastLocation.longitude
+                    ]).addTo(map);
+                    
+                    const speedMph = kmhToMph(loc.lastLocation.speed || 0);
+                    marker.bindPopup(`
+                        <div class="popup-content">
+                            <h4>${loc.lastLocation.deviceName || loc.ident}</h4>
+                            <p><i class="fas fa-tachometer-alt"></i> Speed: ${speedMph} mph</p>
+                            <p><i class="fas fa-battery-three-quarters"></i> Battery: ${loc.lastLocation.batteryLevel || 'N/A'}%</p>
+                            <p><i class="fas fa-car-battery" style="color: ${getVoltageColor(loc.lastLocation.externalVoltage)}"></i> Vehicle Battery: ${loc.lastLocation.externalVoltage ? loc.lastLocation.externalVoltage.toFixed(1) + 'V' : 'N/A'}</p>
+                            <p><i class="fas fa-clock"></i> Last Update: ${new Date(loc.lastLocation.timestamp).toLocaleString()}</p>
+                        </div>
+                    `);
+                    
+                    markers[loc.ident] = marker;
+                }
+            });
+
+            if (Object.keys(markers).length > 0) {
+                const markerBounds = L.featureGroup(Object.values(markers)).getBounds();
+                map.fitBounds(markerBounds);
+            }
+        }
+
+        function updateDeviceInfo(locations) {
+            const deviceDetails = document.getElementById('deviceDetails');
+            const now = new Date();
+            
+            // Update stats
+            let activeCount = 0;
+            let movingCount = 0;
+            let lowBatteryCount = 0;
+            
+            const deviceCards = locations.map(loc => {
+                if (!loc.lastLocation) return '';
+                
+                const speedMph = kmhToMph(loc.lastLocation.speed || 0);
+                const batteryColor = getBatteryColor(loc.lastLocation.batteryLevel);
+                const speedColor = getSpeedColor(speedMph);
+                const lastUpdateTime = new Date(loc.lastLocation.timestamp);
+                const isActive = (now - lastUpdateTime) < INACTIVE_THRESHOLD;
+                
+                // Update counters
+                if (isActive) activeCount++;
+                if (speedMph > MOVING_SPEED_THRESHOLD) movingCount++;
+                if (loc.lastLocation.batteryLevel < LOW_BATTERY_THRESHOLD) lowBatteryCount++;
+                
+                const statusClass = isActive ? 'status-active' : 'status-inactive';
+                const deviceClass = selectedDevices.size === 0 || selectedDevices.has(loc.ident) ? '' : 'hidden';
+                
+                return `
+                    <div class="device-card ${statusClass} ${deviceClass}" data-device-id="${loc.ident}">
+                        <div class="device-status-indicator"></div>
+                        <div class="device-header">
+                            <h4>
+                                <i class="fas fa-satellite-dish"></i>
+                                ${loc.lastLocation.deviceName || loc.ident}
+                            </h4>
+                            <span class="status-badge ${isActive ? 'active' : 'inactive'}">
+                                ${isActive ? 'Active' : 'Inactive'}
+                            </span>
+                        </div>
+                        <div class="device-metrics">
+                            <div class="metric">
+                                <i class="fas fa-tachometer-alt" style="color: ${speedColor}"></i>
+                                <span>${speedMph} mph</span>
+                            </div>
+                            <div class="metric">
+                                <i class="fas fa-battery-three-quarters" style="color: ${batteryColor}"></i>
+                                <span>${loc.lastLocation.batteryLevel || 'N/A'}%</span>
+                            </div>
+                            <div class="metric">
+                                <i class="fas fa-car-battery" style="color: ${getVoltageColor(loc.lastLocation.externalVoltage)}"></i>
+                                <span>${loc.lastLocation.externalVoltage ? loc.lastLocation.externalVoltage.toFixed(1) + 'V' : 'N/A'}</span>
+                            </div>
+                        </div>
+                        <div class="device-details">
+                            <p>
+                                <i class="fas fa-engine${loc.lastLocation.ignition ? ' text-success' : ''}"></i>
+                                Engine: ${loc.lastLocation.ignition ? 'On' : 'Off'}
+                            </p>
+                            <p>
+                                <i class="fas fa-clock"></i>
+                                Last Update: ${getTimeAgo(lastUpdateTime)}
+                            </p>
+                        </div>
+                        <div class="device-actions">
+                            <button class="action-btn" onclick="centerOnDevice('${loc.ident}')">
+                                <i class="fas fa-crosshairs"></i>
+                            </button>
+                            <button class="action-btn" onclick="showDeviceHistory('${loc.ident}')">
+                                <i class="fas fa-history"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            // Update stats display
+            document.getElementById('activeDevicesCount').textContent = activeCount;
+            document.getElementById('movingDevicesCount').textContent = movingCount;
+            document.getElementById('lowBatteryCount').textContent = lowBatteryCount;
+            
+            // Update device cards with current view mode
+            deviceDetails.className = viewMode === 'grid' ? 'grid-view' : 'list-view';
+            deviceDetails.innerHTML = deviceCards;
+        }
+        
+        function getTimeAgo(date) {
+            const seconds = Math.floor((new Date() - date) / 1000);
+            
+            if (seconds < 60) return 'Just now';
+            
+            const minutes = Math.floor(seconds / 60);
+            if (minutes < 60) return `${minutes}m ago`;
+            
+            const hours = Math.floor(minutes / 60);
+            if (hours < 24) return `${hours}h ago`;
+            
+            const days = Math.floor(hours / 24);
+            return `${days}d ago`;
+        }
+        
+        function centerOnDevice(deviceId) {
+            const marker = markers[deviceId];
+            if (marker) {
+                map.setView(marker.getLatLng(), 15);
+                marker.openPopup();
+            }
+        }
+        
+        function showDeviceHistory(deviceId) {
+            // Set date range to last 24 hours
+            const end = new Date();
+            const start = new Date(end);
+            start.setDate(start.getDate() - 1);
+            
+            document.getElementById('startDate').valueAsDate = start;
+            document.getElementById('endDate').valueAsDate = end;
+            
+            // Show history for specific device
+            showHistory(deviceId);
+        }
+        
+        function exportData() {
+            const data = {
+                timestamp: new Date().toISOString(),
+                devices: Object.values(markers).map(marker => ({
+                    id: marker.deviceId,
+                    name: marker.deviceName,
+                    lastPosition: marker.getLatLng(),
+                    lastUpdate: marker.lastUpdate,
+                    status: marker.status
+                }))
+            };
+            
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `tracking-data-${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        }
+
+        function getBatteryColor(level) {
+            if (level >= 70) return '#28a745';
+            if (level >= 30) return '#ffc107';
+            return '#dc3545';
+        }
+
+        function getSpeedColor(speedMph) {
+            if (speedMph === 0) return '#6c757d';
+            if (speedMph <= 30) return '#28a745';  // Adjusted for mph
+            if (speedMph <= 60) return '#ffc107';  // Adjusted for mph
+            return '#dc3545';
+        }
+
+        function getVoltageColor(voltage) {
+            if (!voltage) return '#6c757d';  // Gray for N/A
+            if (voltage >= 13.7) return '#28a745';  // Good - charging
+            if (voltage >= 12.6) return '#17a2b8';  // Normal
+            if (voltage >= 12.2) return '#ffc107';  // Warning
+            return '#dc3545';  // Critical
+        }
+
+        function getDeviceColor(deviceId) {
+            const colors = ['#007bff', '#28a745', '#dc3545', '#ffc107', '#17a2b8'];
+            const hash = deviceId.split('').reduce((acc, char) => {
+                return char.charCodeAt(0) + ((acc << 5) - acc);
+            }, 0);
+            return colors[Math.abs(hash) % colors.length];
+        }
+
+        function clearTrails() {
+            Object.values(polylines).forEach(polyline => map.removeLayer(polyline));
+            polylines = {};
+        }
+
+        let currentPage = 1;
+        let totalPages = 1;
+        let currentInterval = 'raw';
+
+        async function showHistory(deviceId = null) {
+            try {
+                const button = document.getElementById('showHistoryButton');
+                const originalText = button.innerHTML;
+                button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+                button.disabled = true;
+
+                const startDate = document.getElementById('startDate').value;
+                const endDate = document.getElementById('endDate').value;
+                const intervalSelect = document.getElementById('intervalSelect');
+                currentInterval = intervalSelect.value;
+
+                if (!startDate || !endDate) {
+                    alert('Please select both start and end dates');
+                    button.innerHTML = originalText;
+                    button.disabled = false;
+                    return;
+                }
+
+                // Stop auto-refresh when showing history
+                stopAutoRefresh();
+                isHistoryMode = true;
+                
+                const url = new URL('/api/tracker/history', window.location.origin);
+                url.searchParams.append('start', startDate);
+                url.searchParams.append('end', endDate);
+                url.searchParams.append('page', currentPage);
+                url.searchParams.append('limit', 1000);
+                url.searchParams.append('interval', currentInterval);
+                if (deviceId) {
+                    url.searchParams.append('deviceId', deviceId);
+                }
+                
+                const response = await fetch(url);
+                if (!response.ok) {
+                    if (response.status === 400) {
+                        alert('Please select valid start and end dates');
+                        return;
+                    }
+                    throw new Error('Failed to fetch history');
+                }
+                const result = await response.json();
+                const history = result.data;
+                
+                // Update pagination info
+                totalPages = result.pagination.pages;
+                updatePaginationControls();
+                
+                // Clear everything
+                Object.values(markers).forEach(marker => map.removeLayer(marker));
+                markers = {};
+                clearTrails();
+
+                // Update device info panel
+                const dateRange = `${new Date(startDate).toLocaleDateString()} to ${new Date(endDate).toLocaleDateString()}`;
+                const intervalText = currentInterval === 'raw' ? 'Raw Data' : 
+                    `${currentInterval.charAt(0).toUpperCase() + currentInterval.slice(1)}ly Aggregated`;
+                
+                document.getElementById('deviceDetails').innerHTML = `
+                    <div class="device-card">
+                        <h4><i class="fas fa-history"></i> Historical View</h4>
+                        <p><i class="fas fa-calendar"></i> ${dateRange}</p>
+                        <p><i class="fas fa-chart-line"></i> ${intervalText}</p>
+                        <p><i class="fas fa-database"></i> Page ${currentPage} of ${totalPages}</p>
+                        ${result.pagination.total > 0 ? 
+                            `<p><i class="fas fa-info-circle"></i> Showing ${result.pagination.total.toLocaleString()} data points</p>` : 
+                            '<p><i class="fas fa-exclamation-circle"></i> No data available</p>'}
+                    </div>
+                `;
+
+                // Check if there's any data
+                if (Object.keys(history).length === 0) {
+                    alert('No data available for the selected date range');
+                    return;
+                }
+
+                // Sort and process points
+                const sortedPoints = Object.entries(history)
+                    .flatMap(([date, points]) => points)
+                    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+                // Add markers and create path
+                const pathPoints = [];
+                sortedPoints.forEach(point => {
+                    const position = [
+                        point.position.latitude,
+                        point.position.longitude
+                    ];
+                    pathPoints.push(position);
+
+                    const marker = L.marker(position).addTo(map);
+                    const speedMph = kmhToMph(point.position.speed || 0);
+                    
+                    let popupContent = `
+                        <div class="popup-content">
+                            <h4>${point.deviceName || point.ident}</h4>
+                            <p><i class="fas fa-calendar"></i> ${new Date(point.timestamp).toLocaleString()}</p>
+                            <p><i class="fas fa-tachometer-alt"></i> Speed: ${speedMph} mph</p>
+                            <p><i class="fas fa-battery-three-quarters"></i> Battery: ${point.batteryLevel || 'N/A'}%</p>
+                            <p><i class="fas fa-car-battery" style="color: ${getVoltageColor(point.externalVoltage)}"></i> Vehicle Battery: ${point.externalVoltage ? point.externalVoltage.toFixed(1) + 'V' : 'N/A'}</p>
+                    `;
+
+                    if (currentInterval !== 'raw') {
+                        popupContent += `
+                            <p><i class="fas fa-chart-bar"></i> Data points: ${point.dataPoints}</p>
+                        `;
+                    }
+
+                    popupContent += '</div>';
+                    marker.bindPopup(popupContent);
+                });
+
+                // Draw path if showing a single device
+                if (deviceId && pathPoints.length > 1) {
+                    const path = L.polyline(pathPoints, {
+                        color: getDeviceColor(deviceId),
+                        weight: 3,
+                        opacity: 0.8
+                    }).addTo(map);
+                    polylines[deviceId] = path;
+                }
+
+                // Fit map to show all points
+                if (pathPoints.length > 0) {
+                    map.fitBounds(pathPoints);
+                }
+
+                button.innerHTML = originalText;
+                button.disabled = false;
+            } catch (error) {
+                console.error('Error:', error);
+                button.innerHTML = originalText;
+                button.disabled = false;
+            }
+        }
+
+        async function showTrail() {
+            try {
+                const button = document.getElementById('showTrailButton');
+                const originalText = button.innerHTML;
+                button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+                button.disabled = true;
+
+                const startDate = document.getElementById('startDate').value;
+                const endDate = document.getElementById('endDate').value;
+
+                if (!startDate || !endDate) {
+                    alert('Please select both start and end dates');
+                    button.innerHTML = originalText;
+                    button.disabled = false;
+                    return;
+                }
+
+                // Stop auto-refresh when showing trails
+                stopAutoRefresh();
+                isHistoryMode = true;
+                
+                const url = new URL('/api/tracker/history', window.location.origin);
+                url.searchParams.append('start', startDate);
+                url.searchParams.append('end', endDate);
+                
+                const response = await fetch(url);
+                if (!response.ok) {
+                    if (response.status === 400) {
+                        alert('Please select valid start and end dates');
+                        return;
+                    }
+                    throw new Error('Failed to fetch history');
+                }
+                const history = await response.json();
+                
+                clearTrails();
+
+                // Check if there's any data for the selected date range
+                if (Object.keys(history).length === 0) {
+                    alert('No data available for the selected date range');
+                    return;
+                }
+
+                const deviceTrails = {};
+                Object.values(history).flat().forEach(point => {
+                    if (!deviceTrails[point.ident]) {
+                        deviceTrails[point.ident] = [];
+                    }
+                    deviceTrails[point.ident].push([
+                        point.position.latitude,
+                        point.position.longitude
+                    ]);
+                });
+
+                const colors = ['#007bff', '#28a745', '#dc3545', '#ffc107', '#17a2b8'];
+                Object.entries(deviceTrails).forEach(([ident, coordinates], index) => {
+                    const polyline = L.polyline(coordinates, {
+                        color: colors[index % colors.length],
+                        weight: 3,
+                        opacity: 0.8
+                    }).addTo(map);
+                    
+                    polylines[ident] = polyline;
+                });
+
+                if (Object.keys(polylines).length > 0) {
+                    const allCoords = Object.values(deviceTrails).flat();
+                    const bounds = L.latLngBounds(allCoords);
+                    map.fitBounds(bounds);
+                }
+
+                button.innerHTML = originalText;
+                button.disabled = false;
+            } catch (error) {
+                console.error('Error:', error);
+                button.innerHTML = originalText;
+                button.disabled = false;
+            }
+        }
+
+        async function logout() {
+            try {
+                const response = await fetch('/api/auth/logout', { method: 'POST' });
+                if (response.ok) {
+                    window.location.href = '/login';
+                }
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        // Set default date range (last 24 hours)
+        const today = new Date();
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        
+        document.getElementById('startDate').valueAsDate = yesterday;
+        document.getElementById('endDate').valueAsDate = today;
+
+        // Event listeners
+        document.getElementById('refreshButton').addEventListener('click', () => {
+            isHistoryMode = false;
+            clearTrails();
+            fetchLastLocations();
+            startAutoRefresh();
+        });
+        document.getElementById('showHistoryButton').addEventListener('click', showHistory);
+        document.getElementById('showTrailButton').addEventListener('click', showTrail);
+        document.getElementById('logoutButton').addEventListener('click', logout);
+        document.getElementById('filterButton').addEventListener('click', showHistory);
+
+        // Pagination functions
+        function updatePaginationControls() {
+            document.getElementById('currentPageNum').textContent = currentPage;
+            document.getElementById('totalPagesNum').textContent = totalPages;
+            
+            document.getElementById('prevPage').disabled = currentPage <= 1;
+            document.getElementById('nextPage').disabled = currentPage >= totalPages;
+        }
+
+        function changePage(delta) {
+            const newPage = currentPage + delta;
+            if (newPage >= 1 && newPage <= totalPages) {
+                currentPage = newPage;
+                showHistory();
+            }
+        }
+
+        // Initialize map and start tracking
+        initMap();
+        fetchLastLocations();
+        startAutoRefresh();
+    </script>
+</body>
+</html>
