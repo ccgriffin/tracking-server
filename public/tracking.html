@@ -354,6 +354,16 @@
             }
         }
 
+        // Button handlers
+        document.getElementById('refreshButton').addEventListener('click', fetchLastLocations);
+        document.getElementById('clearHistoryButton').addEventListener('click', () => {
+            Object.values(polylines).forEach(polyline => map.removeLayer(polyline));
+            Object.values(markers).forEach(marker => map.removeLayer(marker));
+            polylines = {};
+            markers = {};
+            fetchLastLocations();
+        });
+
         // Modal handling
         const modal = document.getElementById('addTrackerModal');
         const addTrackerButton = document.getElementById('addTrackerButton');
@@ -432,21 +442,62 @@
         }
 
         function createDeviceCard(device) {
+            if (!device.lastLocation) {
+                return `
+                    <div class="device-card status-inactive" data-identifier="${device.identifier}">
+                        <div class="device-status-indicator"></div>
+                        <div class="device-header">
+                            <h4>
+                                <i class="fas fa-satellite-dish"></i>
+                                ${device.identifier}
+                            </h4>
+                            <div class="device-actions">
+                                <button class="action-btn" onclick="removeTracker('${device.identifier}')">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="device-metrics">
+                            <div class="metric">
+                                <i class="fas fa-tachometer-alt"></i>
+                                <span>N/A</span>
+                            </div>
+                            <div class="metric">
+                                <i class="fas fa-battery-three-quarters"></i>
+                                <span>N/A</span>
+                            </div>
+                            <div class="metric">
+                                <i class="fas fa-clock"></i>
+                                <span>Never</span>
+                            </div>
+                        </div>
+                        <div class="device-actions">
+                            <button class="action-btn" disabled>
+                                <i class="fas fa-crosshairs"></i>
+                            </button>
+                            <button class="action-btn" disabled>
+                                <i class="fas fa-history"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+
             const now = new Date();
             const lastUpdateTime = new Date(device.lastLocation.timestamp * 1000);
             const isActive = (now - lastUpdateTime) < INACTIVE_THRESHOLD;
             const speedMph = kmhToMph(device.lastLocation['position.speed'] || 0);
 
             return `
-                <div class="device-card ${isActive ? 'status-active' : 'status-inactive'}" data-identifier="${device.ident}">
+                <div class="device-card ${isActive ? 'status-active' : 'status-inactive'}" data-identifier="${device.identifier}">
                     <div class="device-status-indicator"></div>
                     <div class="device-header">
                         <h4>
                             <i class="fas fa-satellite-dish"></i>
-                            ${device.lastLocation['device.name'] || device.ident}
+                            ${device.lastLocation['device.name'] || device.identifier}
                         </h4>
                         <div class="device-actions">
-                            <button class="action-btn" onclick="removeTracker('${device.ident}')">
+                            <button class="action-btn" onclick="removeTracker('${device.identifier}')">
                                 <i class="fas fa-trash"></i>
                             </button>
                         </div>
@@ -466,10 +517,10 @@
                         </div>
                     </div>
                     <div class="device-actions">
-                        <button class="action-btn" onclick="centerOnDevice('${device.ident}')">
+                        <button class="action-btn" onclick="centerOnDevice('${device.identifier}')">
                             <i class="fas fa-crosshairs"></i>
                         </button>
-                        <button class="action-btn" onclick="showDeviceHistory('${device.ident}')">
+                        <button class="action-btn" onclick="showDeviceHistory('${device.identifier}')">
                             <i class="fas fa-history"></i>
                         </button>
                     </div>
