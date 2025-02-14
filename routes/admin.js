@@ -42,12 +42,33 @@ router.get('/trackers', isAdmin, async (req, res, next) => {
         // Get all unique tracker identifiers
         const uniqueTrackers = await TrackerData.distinct('ident');
 
-        // Get last location for each tracker
+        // Get all data for each tracker
         const trackers = await Promise.all(uniqueTrackers.map(async (ident) => {
+            // Get last location
             const lastLocation = await TrackerData.findOne({ ident })
                 .sort({ timestamp: -1 })
-                .select('ident position.latitude position.longitude timestamp device.name battery.level engine.ignition.status position.speed')
                 .lean();
+
+            // Get all locations in last 24 hours
+            const last24Hours = new Date(Date.now() - 24 * 60 * 60 * 1000);
+            const recentLocations = await TrackerData.find({
+                ident,
+                timestamp: { $gte: Math.floor(last24Hours.getTime() / 1000) }
+            }).sort({ timestamp: -1 }).lean();
+
+            // Calculate stats
+            const totalDataPoints = await TrackerData.countDocuments({ ident });
+            const firstDataPoint = await TrackerData.findOne({ ident })
+                .sort({ timestamp: 1 })
+                .lean();
+            
+            // Calculate activity stats
+            const activePoints = recentLocations.filter(loc => 
+                loc['position.speed'] && loc['position.speed'] > 0
+            ).length;
+            const activityPercentage = recentLocations.length > 0 
+                ? (activePoints / recentLocations.length * 100).toFixed(1)
+                : 0;
 
             // Find users who have this tracker
             const assignedUsers = await User.find({ trackers: ident })
@@ -57,15 +78,29 @@ router.get('/trackers', isAdmin, async (req, res, next) => {
             return {
                 identifier: ident,
                 lastLocation: lastLocation ? {
-                    latitude: lastLocation.position.latitude,
-                    longitude: lastLocation.position.longitude,
-                    timestamp: lastLocation.timestamp,
-                    deviceName: lastLocation.device?.name || ident,
-                    batteryLevel: lastLocation.battery?.level,
-                    ignition: lastLocation.engine?.ignition?.status,
-                    speed: lastLocation.position.speed
+                    ...lastLocation,
+                    formattedTime: new Date(lastLocation.timestamp * 1000).toLocaleString()
                 } : null,
-                assignedUsers
+                stats: {
+                    totalDataPoints,
+                    firstDataPoint: firstDataPoint ? {
+                        timestamp: firstDataPoint.timestamp,
+                        formattedTime: new Date(firstDataPoint.timestamp * 1000).toLocaleString()
+                    } : null,
+                    last24Hours: {
+                        dataPoints: recentLocations.length,
+                        activePoints,
+                        activityPercentage
+                    }
+                },
+                recentLocations: recentLocations.slice(0, 10).map(loc => ({
+                    ...loc,
+                    formattedTime: new Date(loc.timestamp * 1000).toLocaleString()
+                })),
+                assignedUsers,
+                debug: {
+                    lastRawData: lastLocation
+                }
             };
         }));
 
@@ -90,12 +125,53 @@ router.get('/stats', isAdmin, async (req, res, next) => {
         });
         const activeUsers = await User.countDocuments({ status: 'active' });
 
+        // Get system stats
+        const dbStats = {
+            users: await User.collection.stats(),
+            trackerData: await TrackerData.collection.stats()
+        };
+
+        // Get data volume stats
+        const last24Hours = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const dataStats = {
+            total: await TrackerData.countDocuments(),
+            last24Hours: await TrackerData.countDocuments({
+                timestamp: { $gte: Math.floor(last24Hours.getTime() / 1000) }
+            }),
+            byTracker: await TrackerData.aggregate([
+                { $group: { _id: '$ident', count: { $sum: 1 } } }
+            ]).exec()
+        };
+
+        // Get active trackers (sent data in last 24h)
+        const activeTrackers = await TrackerData.distinct('ident', {
+            timestamp: { $gte: Math.floor(last24Hours.getTime() / 1000) }
+        });
+
         res.json({
             stats: {
-                totalUsers,
-                totalTrackers,
-                unassignedTrackers,
-                activeUsers
+                users: {
+                    total: totalUsers,
+                    active: activeUsers
+                },
+                trackers: {
+                    total: totalTrackers,
+                    unassigned: unassignedTrackers,
+                    active: activeTrackers.length,
+                    inactive: totalTrackers - activeTrackers.length
+                },
+                data: {
+                    points: dataStats,
+                    volumeStats: {
+                        totalSizeBytes: dbStats.trackerData.size,
+                        avgObjectSizeBytes: dbStats.trackerData.avgObjSize,
+                        storageUsedBytes: dbStats.trackerData.storageSize
+                    }
+                },
+                debug: {
+                    dbStats,
+                    activeTrackerIds: activeTrackers
+                }
             }
         });
     } catch (error) {
@@ -216,6 +292,125 @@ router.post('/unassign-tracker', isAdmin, async (req, res, next) => {
         res.json({ message: 'Tracker unassigned successfully', user });
     } catch (error) {
         logger.error('Error unassigning tracker:', error);
+        next(error);
+    }
+});
+
+/**
+ * Get detailed debug information for a tracker
+ * @route GET /api/admin/trackers/:identifier/debug
+ */
+router.get('/trackers/:identifier/debug', isAdmin, async (req, res, next) => {
+    try {
+        const { identifier } = req.params;
+
+        // Get all data points for this tracker
+        const allData = await TrackerData.find({ ident: identifier })
+            .sort({ timestamp: -1 })
+            .lean();
+
+        if (allData.length === 0) {
+            return res.status(404).json({ message: 'No data found for tracker' });
+        }
+
+        // Calculate time gaps between data points
+        const timeGaps = [];
+        for (let i = 1; i < allData.length; i++) {
+            const gap = allData[i-1].timestamp - allData[i].timestamp;
+            timeGaps.push({
+                start: new Date(allData[i].timestamp * 1000).toLocaleString(),
+                end: new Date(allData[i-1].timestamp * 1000).toLocaleString(),
+                gapSeconds: gap
+            });
+        }
+
+        // Find largest gaps
+        const sortedGaps = [...timeGaps].sort((a, b) => b.gapSeconds - a.gapSeconds);
+        const largestGaps = sortedGaps.slice(0, 5);
+
+        // Calculate speed statistics
+        const speeds = allData.map(d => d['position.speed'] || 0);
+        const avgSpeed = speeds.reduce((a, b) => a + b, 0) / speeds.length;
+        const maxSpeed = Math.max(...speeds);
+
+        // Calculate battery drain
+        const batteryLevels = allData
+            .filter(d => d['battery.level'] != null)
+            .map(d => ({
+                level: d['battery.level'],
+                timestamp: d.timestamp
+            }));
+        const batteryDrain = [];
+        for (let i = 1; i < batteryLevels.length; i++) {
+            const drain = batteryLevels[i-1].level - batteryLevels[i].level;
+            if (drain > 0) {
+                const timeSpan = batteryLevels[i-1].timestamp - batteryLevels[i].timestamp;
+                batteryDrain.push({
+                    start: new Date(batteryLevels[i].timestamp * 1000).toLocaleString(),
+                    end: new Date(batteryLevels[i-1].timestamp * 1000).toLocaleString(),
+                    drain,
+                    drainPerHour: (drain / timeSpan) * 3600
+                });
+            }
+        }
+
+        // Get assigned users
+        const assignedUsers = await User.find({ trackers: identifier })
+            .select('username email lastLogin')
+            .lean();
+
+        res.json({
+            identifier,
+            summary: {
+                totalDataPoints: allData.length,
+                firstDataPoint: {
+                    timestamp: allData[allData.length - 1].timestamp,
+                    formattedTime: new Date(allData[allData.length - 1].timestamp * 1000).toLocaleString()
+                },
+                lastDataPoint: {
+                    timestamp: allData[0].timestamp,
+                    formattedTime: new Date(allData[0].timestamp * 1000).toLocaleString()
+                },
+                averageTimeBetweenPoints: timeGaps.reduce((a, b) => a + b.gapSeconds, 0) / timeGaps.length
+            },
+            timeGaps: {
+                largest: largestGaps,
+                histogram: timeGaps.reduce((acc, gap) => {
+                    const bucket = Math.floor(gap.gapSeconds / 60); // Group by minutes
+                    acc[bucket] = (acc[bucket] || 0) + 1;
+                    return acc;
+                }, {})
+            },
+            movement: {
+                averageSpeed: avgSpeed,
+                maxSpeed,
+                speedHistogram: speeds.reduce((acc, speed) => {
+                    const bucket = Math.floor(speed / 5) * 5; // Group by 5 km/h
+                    acc[bucket] = (acc[bucket] || 0) + 1;
+                    return acc;
+                }, {})
+            },
+            battery: {
+                levels: batteryLevels.slice(0, 100), // Last 100 readings
+                drain: {
+                    records: batteryDrain,
+                    averagePerHour: batteryDrain.reduce((a, b) => a + b.drainPerHour, 0) / batteryDrain.length
+                }
+            },
+            access: {
+                assignedUsers,
+                lastAccessed: await TrackerData.findOne({ ident: identifier })
+                    .sort({ 'metadata.accessedAt': -1 })
+                    .select('metadata.accessedAt metadata.accessedBy')
+                    .lean()
+            },
+            rawData: {
+                latest: allData[0],
+                sample: allData.filter((_, i) => i % Math.floor(allData.length / 10) === 0) // 10 evenly spaced samples
+            }
+        });
+    } catch (error) {
+        logger.error('Error fetching tracker debug info:', error);
         next(error);
     }
 });
