@@ -4,114 +4,114 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GPS Tracking Dashboard</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
 </head>
 <body>
-    <div class="controls">
-        <div class="control-group">
-            <button id="refreshButton">
-                <i class="fas fa-sync-alt"></i> Refresh
-            </button>
-            <button id="addTrackerButton">
-                <i class="fas fa-plus"></i> Add Tracker
-            </button>
-            <button id="exportDataButton">
-                <i class="fas fa-file-export"></i> Export
-            </button>
-            <button id="showHistoryButton">
-                <i class="fas fa-history"></i> History
-            </button>
-            <button id="logoutButton">
-                <i class="fas fa-sign-out-alt"></i> Logout
-            </button>
+    <div class="app-container">
+        <div class="top-nav">
+            <div class="nav-brand">
+                <svg class="logo-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                </svg>
+                <h1>GPS Tracking</h1>
+            </div>
+            <div class="nav-controls">
+                <button class="button" id="refreshButton">
+                    <i class="fas fa-sync-alt"></i> Refresh
+                </button>
+                <button class="button" id="logoutButton">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </button>
+            </div>
         </div>
-        <div class="date-controls">
-            <div class="date-input">
-                <i class="fas fa-calendar"></i>
-                <input type="date" id="startDate" title="Start Date">
+
+        <div class="controls">
+            <div class="control-group">
+                <button class="button primary" id="addTrackerButton">
+                    <i class="fas fa-plus"></i> Add Tracker
+                </button>
             </div>
-            <div class="date-input">
-                <i class="fas fa-calendar"></i>
-                <input type="date" id="endDate" title="End Date">
-            </div>
-            <div class="interval-select">
-                <i class="fas fa-clock"></i>
-                <select id="intervalSelect" title="Data Interval">
-                    <option value="raw">Raw Data</option>
-                    <option value="minute">Per Minute</option>
-                    <option value="hour">Per Hour</option>
-                    <option value="day">Per Day</option>
-                </select>
-            </div>
-            <button id="filterButton">
-                <i class="fas fa-filter"></i> Filter
-            </button>
-            <button id="showTrailButton">
-                <i class="fas fa-route"></i> Show Trail
-            </button>
-        </div>
-    </div>
-    
-    <div class="dashboard-container">
-        <div class="main-content">
-            <div class="stats-overview">
-                <div class="stat-card">
-                    <i class="fas fa-satellite"></i>
-                    <div class="stat-info">
-                        <span class="stat-label">Active Devices</span>
-                        <span class="stat-value" id="activeDevicesCount">0</span>
-                    </div>
+            <div class="control-group">
+                <div class="date-input">
+                    <i class="fas fa-calendar"></i>
+                    <input type="date" id="startDate" title="Start Date">
                 </div>
-                <div class="stat-card">
-                    <i class="fas fa-car"></i>
-                    <div class="stat-info">
-                        <span class="stat-label">Moving Devices</span>
-                        <span class="stat-value" id="movingDevicesCount">0</span>
-                    </div>
+                <div class="date-input">
+                    <i class="fas fa-calendar"></i>
+                    <input type="date" id="endDate" title="End Date">
                 </div>
-                <div class="stat-card">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <div class="stat-info">
-                        <span class="stat-label">Low Battery</span>
-                        <span class="stat-value" id="lowBatteryCount">0</span>
-                    </div>
-                </div>
+                <button class="button" id="showHistoryButton">
+                    <i class="fas fa-history"></i> Show History
+                </button>
+                <button class="button" id="clearHistoryButton">
+                    <i class="fas fa-times"></i> Clear
+                </button>
             </div>
-            <div id="map"></div>
         </div>
         
-        <div id="deviceInfo">
-            <div class="section-header">
-                <i class="fas fa-satellite"></i>
-                <h3>Device Information</h3>
-                <div class="view-toggle">
-                    <button id="listViewButton" class="active">
-                        <i class="fas fa-list"></i>
+        <div class="dashboard-container">
+            <div class="main-content">
+                <div class="stats-overview">
+                    <div class="stat-card">
+                        <i class="fas fa-satellite"></i>
+                        <div class="stat-info">
+                            <span class="stat-label">Active Devices</span>
+                            <span class="stat-value" id="activeDevicesCount">0</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <i class="fas fa-car"></i>
+                        <div class="stat-info">
+                            <span class="stat-label">Moving Devices</span>
+                            <span class="stat-value" id="movingDevicesCount">0</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <div class="stat-info">
+                            <span class="stat-label">Low Battery</span>
+                            <span class="stat-value" id="lowBatteryCount">0</span>
+                        </div>
+                    </div>
+                </div>
+                <div id="map"></div>
+            </div>
+            
+            <div id="deviceInfo">
+                <div class="section-header">
+                    <i class="fas fa-satellite"></i>
+                    <h3>Device Information</h3>
+                    <div class="view-toggle">
+                        <button id="listViewButton" class="active">
+                            <i class="fas fa-list"></i>
+                        </button>
+                        <button id="gridViewButton">
+                            <i class="fas fa-th"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="device-filters">
+                    <button class="filter-btn active" data-filter="all">All</button>
+                    <button class="filter-btn" data-filter="active">Active</button>
+                    <button class="filter-btn" data-filter="inactive">Inactive</button>
+                </div>
+                <div id="deviceDetails"></div>
+                <div class="pagination-controls">
+                    <button id="prevPage" onclick="changePage(-1)" disabled>
+                        <i class="fas fa-chevron-left"></i> Previous
                     </button>
-                    <button id="gridViewButton">
-                        <i class="fas fa-th"></i>
+                    <div class="pagination-info">
+                        Page <span id="currentPageNum">1</span> of <span id="totalPagesNum">1</span>
+                    </div>
+                    <button id="nextPage" onclick="changePage(1)" disabled>
+                        Next <i class="fas fa-chevron-right"></i>
                     </button>
                 </div>
-            </div>
-            <div class="device-filters">
-                <button class="filter-btn active" data-filter="all">All</button>
-                <button class="filter-btn" data-filter="active">Active</button>
-                <button class="filter-btn" data-filter="inactive">Inactive</button>
-            </div>
-            <div id="deviceDetails"></div>
-            <div class="pagination-controls">
-                <button id="prevPage" onclick="changePage(-1)" disabled>
-                    <i class="fas fa-chevron-left"></i> Previous
-                </button>
-                <div class="pagination-info">
-                    Page <span id="currentPageNum">1</span> of <span id="totalPagesNum">1</span>
-                </div>
-                <button id="nextPage" onclick="changePage(1)" disabled>
-                    Next <i class="fas fa-chevron-right"></i>
-                </button>
             </div>
         </div>
     </div>
@@ -176,9 +176,11 @@
 
         // Update map markers
         function updateMap(trackers) {
-            // Remove old markers
             Object.values(markers).forEach(marker => map.removeLayer(marker));
             markers = {};
+
+            const bounds = L.latLngBounds();
+            let hasMarkers = false;
 
             trackers.forEach(tracker => {
                 if (tracker.lastLocation) {
@@ -188,8 +190,14 @@
                     
                     markers[tracker.identifier] = marker;
                     marker.addTo(map);
+                    bounds.extend([latitude, longitude]);
+                    hasMarkers = true;
                 }
             });
+
+            if (hasMarkers) {
+                map.fitBounds(bounds, { padding: [50, 50] });
+            }
         }
 
         // Create popup content
@@ -234,15 +242,14 @@
             if (refreshInterval) {
                 clearInterval(refreshInterval);
             }
-            refreshInterval = setInterval(fetchLastLocations, 10000); // Refresh every 10 seconds
+            refreshInterval = setInterval(fetchLastLocations, 10000);
         }
 
-        // Utility function to convert km/h to mph
+        // Utility functions
         function kmhToMph(kmh) {
             return Math.round(kmh * 0.621371);
         }
 
-        // Utility function to format time ago
         function getTimeAgo(date) {
             const seconds = Math.floor((new Date() - date) / 1000);
             
@@ -252,7 +259,7 @@
             return `${Math.floor(seconds / 86400)}d ago`;
         }
 
-        // Center map on device
+        // Device interactions
         function centerOnDevice(identifier) {
             const marker = markers[identifier];
             if (marker) {
@@ -261,7 +268,6 @@
             }
         }
 
-        // Show device history
         async function showDeviceHistory(identifier) {
             try {
                 const startDate = document.getElementById('startDate').value;
@@ -283,53 +289,56 @@
                     return;
                 }
 
-                // Clear existing polylines
                 Object.values(polylines).forEach(polyline => map.removeLayer(polyline));
+                Object.values(markers).forEach(marker => map.removeLayer(marker));
                 polylines = {};
+                markers = {};
 
-                // Create path coordinates
-                const coordinates = data.history.map(point => [
-                    point.position.latitude,
-                    point.position.longitude
-                ]);
+                const coordinates = [];
+                data.history.forEach((point, index) => {
+                    const pos = [point.position.latitude, point.position.longitude];
+                    coordinates.push(pos);
+                    
+                    const marker = L.marker(pos).bindPopup(`
+                        <div class="popup-content">
+                            <h3>${point.device?.name || identifier}</h3>
+                            <p>Speed: ${point.position.speed || 0} km/h</p>
+                            <p>Battery: ${point.battery?.level || 'N/A'}%</p>
+                            <p>Time: ${new Date(point.timestamp).toLocaleString()}</p>
+                        </div>
+                    `);
+                    markers[`${identifier}_${index}`] = marker;
+                    marker.addTo(map);
+                });
 
-                // Draw polyline
                 const polyline = L.polyline(coordinates, {
                     color: 'blue',
                     weight: 3,
-                    opacity: 0.5
+                    opacity: 0.8
                 }).addTo(map);
 
                 polylines[identifier] = polyline;
-
-                // Fit map to show entire path
-                map.fitBounds(polyline.getBounds());
+                map.fitBounds(polyline.getBounds(), { padding: [50, 50] });
             } catch (error) {
                 console.error('Error fetching history:', error);
                 alert('Failed to fetch device history');
             }
         }
 
-        // Add Tracker Modal
+        // Modal handling
         const modal = document.getElementById('addTrackerModal');
         const addTrackerButton = document.getElementById('addTrackerButton');
         const closeButton = document.querySelector('.close-button');
 
-        addTrackerButton.onclick = () => {
-            modal.style.display = 'block';
-        };
-
-        closeButton.onclick = () => {
-            modal.style.display = 'none';
-        };
-
+        addTrackerButton.onclick = () => modal.style.display = 'block';
+        closeButton.onclick = () => modal.style.display = 'none';
         window.onclick = (event) => {
             if (event.target === modal) {
                 modal.style.display = 'none';
             }
         };
 
-        // Add Tracker Form
+        // Form handling
         document.getElementById('addTrackerForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const identifier = document.getElementById('trackerIdentifier').value;
@@ -342,9 +351,7 @@
 
                 const response = await fetch('/api/tracker/add', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ identifier })
                 });
 
@@ -353,7 +360,7 @@
                 if (response.ok) {
                     modal.style.display = 'none';
                     document.getElementById('trackerIdentifier').value = '';
-                    fetchLastLocations(); // Refresh the tracker list
+                    fetchLastLocations();
                 } else {
                     alert(data.message || 'Failed to add tracker');
                 }
@@ -366,7 +373,6 @@
             }
         });
 
-        // Remove Tracker
         async function removeTracker(identifier) {
             if (!confirm(`Are you sure you want to remove tracker ${identifier}?`)) {
                 return;
@@ -380,7 +386,7 @@
                 const data = await response.json();
 
                 if (response.ok) {
-                    fetchLastLocations(); // Refresh the tracker list
+                    fetchLastLocations();
                 } else {
                     alert(data.message || 'Failed to remove tracker');
                 }
@@ -390,7 +396,6 @@
             }
         }
 
-        // Update device card template to include remove button
         function createDeviceCard(device) {
             const now = new Date();
             const lastUpdateTime = new Date(device.lastLocation.timestamp);
@@ -437,12 +442,7 @@
             `;
         }
 
-        // Initialize
-        initMap();
-        fetchLastLocations();
-        startAutoRefresh();
-
-        // Add event listeners for history controls
+        // Event listeners
         document.getElementById('showHistoryButton').addEventListener('click', () => {
             const selectedDevices = Array.from(document.querySelectorAll('.device-card.selected'))
                 .map(card => card.dataset.identifier);
@@ -455,143 +455,17 @@
             showDeviceHistory(selectedDevices[0]);
         });
 
-        // Add click handler for device selection
         document.getElementById('deviceDetails').addEventListener('click', (e) => {
             const card = e.target.closest('.device-card');
             if (card && !e.target.closest('.device-actions')) {
                 card.classList.toggle('selected');
             }
         });
+
+        // Initialize
+        initMap();
+        fetchLastLocations();
+        startAutoRefresh();
     </script>
-
-    <style>
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-        }
-
-        .modal-content {
-            background-color: var(--card-bg);
-            margin: 15% auto;
-            padding: 2rem;
-            border-radius: 1rem;
-            width: 90%;
-            max-width: 500px;
-            box-shadow: var(--shadow-lg);
-            position: relative;
-        }
-
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1.5rem;
-        }
-
-        .modal-header h2 {
-            margin: 0;
-            color: var(--text-color);
-            font-size: 1.5rem;
-        }
-
-        .close-button {
-            background: none;
-            border: none;
-            font-size: 1.5rem;
-            cursor: pointer;
-            color: var(--text-secondary);
-        }
-
-        .close-button:hover {
-            color: var(--text-color);
-        }
-
-        #addTrackerForm .input-group {
-            margin-bottom: 1.5rem;
-        }
-
-        #addTrackerForm label {
-            display: block;
-            margin-bottom: 0.5rem;
-            color: var(--text-color);
-            font-weight: 500;
-        }
-
-        #addTrackerForm input {
-            width: 100%;
-            padding: 0.75rem;
-            border: 1px solid var(--border-color);
-            border-radius: 0.5rem;
-            font-size: 1rem;
-            color: var(--text-color);
-            background: var(--card-bg);
-        }
-
-        #addTrackerForm input:focus {
-            outline: none;
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
-        }
-
-        .device-actions {
-            display: flex;
-            gap: 0.5rem;
-            margin-top: 1rem;
-        }
-
-        .action-btn {
-            padding: 0.5rem;
-            border: 1px solid var(--border-color);
-            border-radius: 0.5rem;
-            background: var(--card-bg);
-            color: var(--text-color);
-            cursor: pointer;
-            transition: var(--transition);
-        }
-
-        .action-btn:hover {
-            border-color: var(--primary-color);
-            color: var(--primary-color);
-        }
-
-        .action-btn.danger {
-            color: var(--danger-color);
-            border-color: var(--danger-color);
-        }
-
-        .action-btn.danger:hover {
-            background: var(--danger-color);
-            color: white;
-        }
-
-        .device-card {
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .device-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-
-        .device-card.selected {
-            border: 2px solid var(--primary-color);
-            background-color: rgba(79, 70, 229, 0.1);
-        }
-
-        .device-card .device-actions {
-            pointer-events: none;
-        }
-
-        .device-card .device-actions button {
-            pointer-events: all;
-        }
-    </style>
 </body>
 </html>
