@@ -24,14 +24,36 @@ router.post('/data', async (req, res, next) => {
         
         for (const data of dataPoints) {
             // Validate required fields
-            if (!data.ident || !data.timestamp) {
-                logger.warn('Missing required fields in data point:', data);
+            if (!data.ident) {
+                logger.warn('Missing identifier in data point:', data);
                 continue;
             }
 
-            // Store raw data exactly as received
-            const trackerData = new TrackerData(data);
-            await trackerData.save();
+            // Use current time if timestamp is missing
+            if (!data.timestamp) {
+                data.timestamp = Math.floor(Date.now() / 1000);
+                logger.info(`Using current time for tracker ${data.ident}`);
+            }
+
+            try {
+                // Check if data point already exists
+                const existingData = await TrackerData.findOne({
+                    ident: data.ident,
+                    timestamp: data.timestamp
+                });
+
+                if (existingData) {
+                    logger.info(`Skipping duplicate data point for tracker ${data.ident} at ${new Date(data.timestamp * 1000).toLocaleString()}`);
+                    continue;
+                }
+
+                // Store raw data exactly as received
+                const trackerData = new TrackerData(data);
+                await trackerData.save();
+            } catch (error) {
+                logger.error(`Error saving data point for tracker ${data.ident}:`, error);
+                continue;
+            }
 
             // Detailed console output for tracker message
             console.log('\n=== Tracker Message Received ===');
