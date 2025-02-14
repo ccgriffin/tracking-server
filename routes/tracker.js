@@ -221,4 +221,75 @@ router.get('/history/:identifier', auth.isAuthenticated, async (req, res, next) 
     }
 });
 
+/**
+ * Get raw message data for a tracker
+ * @route GET /api/tracker/:identifier/messages
+ * @param {string} req.params.identifier - Tracker identifier
+ * @param {number} req.query.page - Page number (default: 1)
+ * @param {number} req.query.limit - Items per page (default: 50)
+ * @param {string} req.query.start - Start date (ISO format)
+ * @param {string} req.query.end - End date (ISO format)
+ * @returns {Object} 200 - Success response with paginated messages
+ * @returns {Object} 404 - Tracker not found error
+ * @throws {Error} 500 - Server error
+ */
+router.get('/:identifier/messages', auth.isAuthenticated, async (req, res, next) => {
+    try {
+        const { identifier } = req.params;
+        const { start, end } = req.query;
+        const page = parseInt(req.query.page) || 1;
+        const limit = Math.min(parseInt(req.query.limit) || 50, 100); // Max 100 items per page
+
+        // Validate tracker ownership
+        if (!req.user.trackers.includes(identifier)) {
+            return res.status(404).json({ message: 'Tracker not found in your account' });
+        }
+
+        // Build query
+        const query = { ident: identifier };
+        if (start || end) {
+            query.timestamp = {};
+            if (start) query.timestamp.$gte = Math.floor(new Date(start).getTime() / 1000);
+            if (end) query.timestamp.$lte = Math.floor(new Date(end).getTime() / 1000);
+        }
+
+        // Get total count for pagination
+        const total = await TrackerData.countDocuments(query);
+        const totalPages = Math.ceil(total / limit);
+
+        // Get paginated messages
+        const messages = await TrackerData.find(query)
+            .sort({ timestamp: -1 })
+            .skip((page - 1) * limit)
+            .limit(limit)
+            .lean();
+
+        // Format timestamps and add metadata
+        const formattedMessages = messages.map(msg => ({
+            ...msg,
+            metadata: {
+                formattedTime: new Date(msg.timestamp * 1000).toLocaleString(),
+                hasLocation: !!(msg['position.latitude'] && msg['position.longitude']),
+                hasBattery: msg['battery.level'] != null,
+                hasSpeed: msg['position.speed'] != null
+            }
+        }));
+
+        res.json({
+            messages: formattedMessages,
+            pagination: {
+                total,
+                totalPages,
+                currentPage: page,
+                limit,
+                hasNextPage: page < totalPages,
+                hasPrevPage: page > 1
+            }
+        });
+    } catch (error) {
+        logger.error('Error fetching tracker messages:', error);
+        next(error);
+    }
+});
+
 module.exports = router;
