@@ -167,18 +167,27 @@ router.get('/list', auth.isAuthenticated, async (req, res, next) => {
                 .sort({ timestamp: -1})
                 .lean();
 
+            // Format location data
+            const formattedLocation = lastLocation ? {
+                latitude: lastLocation['position.latitude'],
+                longitude: lastLocation['position.longitude'],
+                timestamp: lastLocation.timestamp,
+                formattedTime: new Date(lastLocation.timestamp * 1000).toLocaleString(),
+                deviceName: lastLocation['device.name'] || identifier,
+                batteryLevel: lastLocation['battery.level'],
+                ignition: lastLocation['engine.ignition.status'],
+                speed: lastLocation['position.speed'],
+                metadata: {
+                    hasLocation: !!(lastLocation['position.latitude'] && lastLocation['position.longitude']),
+                    hasBattery: lastLocation['battery.level'] != null,
+                    hasSpeed: lastLocation['position.speed'] != null
+                },
+                rawData: lastLocation
+            } : null;
+
             return {
                 identifier,
-                lastLocation: lastLocation ? {
-                    ...lastLocation,
-                    latitude: lastLocation['position.latitude'],
-                    longitude: lastLocation['position.longitude'],
-                    timestamp: lastLocation.timestamp,
-                    deviceName: lastLocation['device.name'] || identifier,
-                    batteryLevel: lastLocation['battery.level'],
-                    ignition: lastLocation['engine.ignition.status'],
-                    speed: lastLocation['position.speed']
-                } : null
+                lastLocation: formattedLocation
             };
         }));
 
@@ -224,15 +233,20 @@ router.get('/history/:identifier', auth.isAuthenticated, async (req, res, next) 
 
         // Format history points
         const history = rawHistory.map(point => ({
-            ...point,
             latitude: point['position.latitude'],
             longitude: point['position.longitude'],
             timestamp: point.timestamp,
+            formattedTime: new Date(point.timestamp * 1000).toLocaleString(),
             deviceName: point['device.name'] || identifier,
             batteryLevel: point['battery.level'],
             ignition: point['engine.ignition.status'],
             speed: point['position.speed'],
-            formattedTime: new Date(point.timestamp * 1000).toLocaleString()
+            metadata: {
+                hasLocation: !!(point['position.latitude'] && point['position.longitude']),
+                hasBattery: point['battery.level'] != null,
+                hasSpeed: point['position.speed'] != null
+            },
+            rawData: point
         }));
 
         res.json({ 
@@ -294,15 +308,22 @@ router.get('/:identifier/messages', auth.isAuthenticated, async (req, res, next)
             .limit(limit)
             .lean();
 
-        // Format timestamps and add metadata
+        // Format messages
         const formattedMessages = messages.map(msg => ({
-            ...msg,
+            latitude: msg['position.latitude'],
+            longitude: msg['position.longitude'],
+            timestamp: msg.timestamp,
+            formattedTime: new Date(msg.timestamp * 1000).toLocaleString(),
+            deviceName: msg['device.name'] || identifier,
+            batteryLevel: msg['battery.level'],
+            ignition: msg['engine.ignition.status'],
+            speed: msg['position.speed'],
             metadata: {
-                formattedTime: new Date(msg.timestamp * 1000).toLocaleString(),
                 hasLocation: !!(msg['position.latitude'] && msg['position.longitude']),
                 hasBattery: msg['battery.level'] != null,
                 hasSpeed: msg['position.speed'] != null
-            }
+            },
+            rawData: msg
         }));
 
         res.json({
