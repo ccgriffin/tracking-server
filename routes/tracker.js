@@ -29,20 +29,8 @@ router.post('/data', async (req, res, next) => {
                 continue;
             }
 
-            // Convert Flespi dot notation to nested object
-            const convertedData = {};
-            for (const [key, value] of Object.entries(data)) {
-                const keys = key.split('.');
-                let current = convertedData;
-                for (let i = 0; i < keys.length - 1; i++) {
-                    current[keys[i]] = current[keys[i]] || {};
-                    current = current[keys[i]];
-                }
-                current[keys[keys.length - 1]] = value;
-            }
-
-            // Store converted data
-            const trackerData = new TrackerData(convertedData);
+            // Store raw data exactly as received
+            const trackerData = new TrackerData(data);
             await trackerData.save();
 
             // Detailed console output for tracker message
