@@ -147,15 +147,7 @@ router.get('/list', auth.isAuthenticated, async (req, res, next) => {
 
             return {
                 identifier,
-                lastLocation: lastLocation ? {
-                    latitude: lastLocation['position.latitude'],
-                    longitude: lastLocation['position.longitude'],
-                    timestamp: lastLocation.timestamp,
-                    deviceName: lastLocation['device.name'] || identifier,
-                    batteryLevel: lastLocation['battery.level'],
-                    ignition: lastLocation['engine.ignition.status'],
-                    speed: lastLocation['position.speed']
-                } : null
+                lastLocation: lastLocation ? lastLocation : null
             };
         }));
 

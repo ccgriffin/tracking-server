@@ -184,10 +184,15 @@
 
             trackers.forEach(tracker => {
                 if (tracker.lastLocation) {
-                    const marker = L.marker([
-                        tracker.lastLocation['position.latitude'],
-                        tracker.lastLocation['position.longitude']
-                    ])
+                    const latitude = tracker.lastLocation['position.latitude'];
+                    const longitude = tracker.lastLocation['position.longitude'];
+                    
+                    if (!latitude || !longitude) {
+                        console.warn(`Invalid coordinates for tracker ${tracker.identifier}`);
+                        return;
+                    }
+
+                    const marker = L.marker([latitude, longitude])
                         .bindPopup(createPopupContent(tracker));
                     
                     markers[tracker.identifier] = marker;
