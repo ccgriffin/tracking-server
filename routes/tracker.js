@@ -73,7 +73,7 @@ router.post('/data', async (req, res, next) => {
  */
 router.post('/add', auth.isAuthenticated, async (req, res, next) => {
     try {
-        const { identifier } = req.body;
+        const identifier = req.body.identifier;
         
         if (!identifier) {
             return res.status(400).json({ message: 'Tracker identifier is required' });

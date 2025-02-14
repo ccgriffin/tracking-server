@@ -184,13 +184,18 @@
 
             trackers.forEach(tracker => {
                 if (tracker.lastLocation) {
-                    const { latitude, longitude } = tracker.lastLocation;
-                    const marker = L.marker([latitude, longitude])
+                    const marker = L.marker([
+                        tracker.lastLocation['position.latitude'],
+                        tracker.lastLocation['position.longitude']
+                    ])
                         .bindPopup(createPopupContent(tracker));
                     
                     markers[tracker.identifier] = marker;
                     marker.addTo(map);
-                    bounds.extend([latitude, longitude]);
+                    bounds.extend([
+                        tracker.lastLocation['position.latitude'],
+                        tracker.lastLocation['position.longitude']
+                    ]);
                     hasMarkers = true;
                 }
             });
@@ -202,13 +207,22 @@
 
         // Create popup content
         function createPopupContent(tracker) {
-            const { deviceName, speed, batteryLevel, timestamp } = tracker.lastLocation;
+            const timestamp = new Date(tracker.lastLocation.timestamp * 1000);
+            const formattedTime = timestamp.toLocaleString('en-GB', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            });
             return `
                 <div class="popup-content">
-                    <h3>${deviceName || tracker.identifier}</h3>
-                    <p>Speed: ${speed || 0} km/h</p>
-                    <p>Battery: ${batteryLevel || 'N/A'}%</p>
-                    <p>Last Update: ${new Date(timestamp).toLocaleString()}</p>
+                    <h3>${tracker.lastLocation['device.name'] || tracker.identifier}</h3>
+                    <p>Speed: ${tracker.lastLocation['position.speed'] || 0} km/h</p>
+                    <p>Battery: ${tracker.lastLocation['battery.level'] || 'N/A'}%</p>
+                    <p>Last Update: ${formattedTime}</p>
                 </div>
             `;
         }
@@ -223,13 +237,13 @@
         function updateStats(trackers) {
             const now = new Date();
             const activeDevices = trackers.filter(t => 
-                t.lastLocation && (now - new Date(t.lastLocation.timestamp)) < INACTIVE_THRESHOLD
+                t.lastLocation && (now - new Date(t.lastLocation.timestamp * 1000)) < INACTIVE_THRESHOLD
             );
             const movingDevices = trackers.filter(t => 
-                t.lastLocation && t.lastLocation.speed > MOVING_SPEED_THRESHOLD
+                t.lastLocation && t.lastLocation['position.speed'] > MOVING_SPEED_THRESHOLD
             );
             const lowBatteryDevices = trackers.filter(t => 
-                t.lastLocation && t.lastLocation.batteryLevel < LOW_BATTERY_THRESHOLD
+                t.lastLocation && t.lastLocation['battery.level'] < LOW_BATTERY_THRESHOLD
             );
 
             document.getElementById('activeDevicesCount').textContent = activeDevices.length;
@@ -296,15 +310,25 @@
 
                 const coordinates = [];
                 data.history.forEach((point, index) => {
-                    const pos = [point.position.latitude, point.position.longitude];
+                    const pos = [point['position.latitude'], point['position.longitude']];
                     coordinates.push(pos);
                     
+                    const timestamp = new Date(point.timestamp * 1000);
+                    const formattedTime = timestamp.toLocaleString('en-GB', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit',
+                        hour12: false
+                    });
                     const marker = L.marker(pos).bindPopup(`
                         <div class="popup-content">
                             <h3>${point.device?.name || identifier}</h3>
-                            <p>Speed: ${point.position.speed || 0} km/h</p>
-                            <p>Battery: ${point.battery?.level || 'N/A'}%</p>
-                            <p>Time: ${new Date(point.timestamp).toLocaleString()}</p>
+                            <p>Speed: ${point['position.speed'] || 0} km/h</p>
+                            <p>Battery: ${point['battery.level'] || 'N/A'}%</p>
+                            <p>Time: ${formattedTime}</p>
                         </div>
                     `);
                     markers[`${identifier}_${index}`] = marker;
@@ -352,7 +376,7 @@
                 const response = await fetch('/api/tracker/add', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ identifier })
+                    body: JSON.stringify({ identifier: identifier })
                 });
 
                 const data = await response.json();
@@ -398,9 +422,9 @@
 
         function createDeviceCard(device) {
             const now = new Date();
-            const lastUpdateTime = new Date(device.lastLocation.timestamp);
+            const lastUpdateTime = new Date(device.lastLocation.timestamp * 1000);
             const isActive = (now - lastUpdateTime) < INACTIVE_THRESHOLD;
-            const speedMph = kmhToMph(device.lastLocation.speed || 0);
+            const speedMph = kmhToMph(device.lastLocation['position.speed'] || 0);
 
             return `
                 <div class="device-card ${isActive ? 'status-active' : 'status-inactive'}" data-identifier="${device.ident}">
@@ -408,7 +432,7 @@
                     <div class="device-header">
                         <h4>
                             <i class="fas fa-satellite-dish"></i>
-                            ${device.lastLocation.deviceName || device.ident}
+                            ${device.lastLocation['device.name'] || device.ident}
                         </h4>
                         <div class="device-actions">
                             <button class="action-btn" onclick="removeTracker('${device.ident}')">
@@ -423,7 +447,7 @@
                         </div>
                         <div class="metric">
                             <i class="fas fa-battery-three-quarters"></i>
-                            <span>${device.lastLocation.batteryLevel || 'N/A'}%</span>
+                            <span>${device.lastLocation['battery.level'] || 'N/A'}%</span>
                         </div>
                         <div class="metric">
                             <i class="fas fa-clock"></i>
