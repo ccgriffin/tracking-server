@@ -36,42 +36,27 @@ This guide explains how to configure Flespi to stream GPS data to your tracking 
 
 The server accepts two data formats from Flespi:
 
-#### Option 1: Direct JSON Array
+#### Option 1: Flespi Dot Notation Format
 
 ```json
 [
   {
-    "ident": "device-id-here",
-    "timestamp": 1234567890,
-    "position": {
-      "latitude": 0.0,
-      "longitude": 0.0,
-      "speed": 0,
-      "altitude": 0,
-      "direction": 0,
-      "satellites": 0
-    },
-    "battery": {
-      "level": 100,
-      "voltage": 4.0
-    },
-    "engine": {
-      "ignition": {
-        "status": false
-      }
-    },
-    "device": {
-      "id": 123,
-      "name": "device-name",
-      "type": {
-        "id": 456
-      }
-    },
-    "external": {
-      "powersource": {
-        "voltage": 12.0
-      }
-    }
+    "ident": "350317172663183",
+    "timestamp": 1739471454,
+    "battery.level": 94,
+    "battery.voltage": 3.977,
+    "codec.id": 142,
+    "device.id": 5511474,
+    "device.name": "CB500F",
+    "device.type.id": 353,
+    "engine.ignition.status": false,
+    "external.powersource.voltage": 11.998,
+    "position.altitude": 0,
+    "position.direction": 0,
+    "position.latitude": 52.681715,
+    "position.longitude": -1.828433,
+    "position.satellites": 0,
+    "position.speed": 0
   }
 ]
 ```
@@ -87,45 +72,36 @@ The server accepts two data formats from Flespi:
 }
 ```
 
-### 4. Data Mapping
+### 4. Data Fields
 
-Configure the stream data mapping:
+The server expects the following fields in dot notation format:
 
-```json
-{
-  "ident": "%.device.id",
-  "timestamp": "%.timestamp",
-  "position": {
-    "latitude": "%.position.latitude",
-    "longitude": "%.position.longitude",
-    "speed": "%.position.speed",
-    "altitude": "%.position.altitude",
-    "direction": "%.position.direction",
-    "satellites": "%.position.satellites"
-  },
-  "battery": {
-    "level": "%.battery.level",
-    "voltage": "%.battery.voltage"
-  },
-  "engine": {
-    "ignition": {
-      "status": "%.engine.ignition.status"
-    }
-  },
-  "device": {
-    "id": "%.device.id",
-    "name": "%.device.name",
-    "type": {
-      "id": "%.device.type.id"
-    }
-  },
-  "external": {
-    "powersource": {
-      "voltage": "%.external.powersource.voltage"
-    }
-  }
-}
-```
+Required fields:
+- `ident`: Device identifier
+- `timestamp`: Unix timestamp
+
+Optional fields:
+- `position.latitude`: GPS latitude
+- `position.longitude`: GPS longitude
+- `position.speed`: Speed in km/h
+- `position.altitude`: Altitude in meters
+- `position.direction`: Direction in degrees
+- `position.satellites`: Number of GPS satellites
+
+Device information:
+- `device.id`: Device ID in Flespi
+- `device.name`: Device name
+- `device.type.id`: Device type ID
+
+Status information:
+- `battery.level`: Battery level percentage
+- `battery.voltage`: Battery voltage
+- `engine.ignition.status`: Engine ignition status
+- `external.powersource.voltage`: External power voltage
+
+Additional fields:
+- `codec.id`: Codec identifier
+- Any other fields in dot notation format
 
 ### 5. Testing the Integration
 
