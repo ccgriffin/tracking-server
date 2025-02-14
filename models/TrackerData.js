@@ -7,7 +7,7 @@ const trackerDataSchema = new mongoose.Schema({
         index: true
     },
     timestamp: {
-        type: Date,
+        type: Number,  // Store Unix timestamp as a number
         required: true,
         index: true
     },

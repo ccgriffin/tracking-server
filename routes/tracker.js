@@ -30,7 +30,7 @@ router.post('/data', async (req, res, next) => {
         // Create new tracker data record
         const trackerData = new TrackerData({
             ident: data.ident,
-            timestamp: new Date(data.timestamp * 1000), // Convert Unix timestamp to Date
+            timestamp: data.timestamp, // Store raw Unix timestamp
             position: {
                 latitude: data.position.latitude,
                 longitude: data.position.longitude,
@@ -42,6 +42,26 @@ router.post('/data', async (req, res, next) => {
         });
 
         await trackerData.save();
+        
+        // Detailed console output for tracker message
+        console.log('\n=== Tracker Message Received ===');
+        console.log(`Identifier: ${data.ident}`);
+        const timestamp = new Date(data.timestamp * 1000);
+        console.log(`Timestamp: ${timestamp.toLocaleString('en-GB', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        })}`);
+        console.log(`Location: ${data.position.latitude}, ${data.position.longitude}`);
+        console.log(`Speed: ${data.position.speed || 0} km/h`);
+        console.log(`Battery: ${data.battery?.level || 'N/A'}%`);
+        console.log(`Engine Status: ${data.engine?.ignition?.status ? 'ON' : 'OFF'}`);
+        console.log('============================\n');
+        
         logger.info(`Received data from tracker: ${data.ident}`);
         res.status(200).json({ message: 'Data received successfully' });
     } catch (error) {
@@ -180,8 +200,8 @@ router.get('/history/:identifier', auth.isAuthenticated, async (req, res, next) 
             timestamp: {}
         };
 
-        if (start) query.timestamp.$gte = new Date(start);
-        if (end) query.timestamp.$lte = new Date(end);
+        if (start) query.timestamp.$gte = Math.floor(new Date(start).getTime() / 1000);
+        if (end) query.timestamp.$lte = Math.floor(new Date(end).getTime() / 1000);
 
         const history = await TrackerData.find(query)
             .sort({ timestamp: 1 })
