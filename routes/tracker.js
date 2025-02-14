@@ -169,7 +169,16 @@ router.get('/list', auth.isAuthenticated, async (req, res, next) => {
 
             return {
                 identifier,
-                lastLocation: lastLocation ? lastLocation : null
+                lastLocation: lastLocation ? {
+                    ...lastLocation,
+                    latitude: lastLocation['position.latitude'],
+                    longitude: lastLocation['position.longitude'],
+                    timestamp: lastLocation.timestamp,
+                    deviceName: lastLocation['device.name'] || identifier,
+                    batteryLevel: lastLocation['battery.level'],
+                    ignition: lastLocation['engine.ignition.status'],
+                    speed: lastLocation['position.speed']
+                } : null
             };
         }));
 
@@ -209,12 +218,33 @@ router.get('/history/:identifier', auth.isAuthenticated, async (req, res, next) 
         if (start) query.timestamp.$gte = Math.floor(new Date(start).getTime() / 1000);
         if (end) query.timestamp.$lte = Math.floor(new Date(end).getTime() / 1000);
 
-        const history = await TrackerData.find(query)
+        const rawHistory = await TrackerData.find(query)
             .sort({ timestamp: 1 })
-            .select('-_id ident timestamp position.latitude position.longitude position.speed battery.level engine.ignition.status device.name')
             .lean();
 
-        res.json({ history });
+        // Format history points
+        const history = rawHistory.map(point => ({
+            ...point,
+            latitude: point['position.latitude'],
+            longitude: point['position.longitude'],
+            timestamp: point.timestamp,
+            deviceName: point['device.name'] || identifier,
+            batteryLevel: point['battery.level'],
+            ignition: point['engine.ignition.status'],
+            speed: point['position.speed'],
+            formattedTime: new Date(point.timestamp * 1000).toLocaleString()
+        }));
+
+        res.json({ 
+            history,
+            summary: {
+                totalPoints: history.length,
+                timeRange: history.length > 0 ? {
+                    start: new Date(history[0].timestamp * 1000).toLocaleString(),
+                    end: new Date(history[history.length - 1].timestamp * 1000).toLocaleString()
+                } : null
+            }
+        });
     } catch (error) {
         logger.error('Error fetching tracker history:', error);
         next(error);
