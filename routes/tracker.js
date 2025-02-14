@@ -20,49 +20,54 @@ const router = express.Router();
  */
 router.post('/data', async (req, res, next) => {
     try {
-        const data = req.body;
+        const dataPoints = Array.isArray(req.body) ? req.body : [req.body];
         
-        // Validate required fields
-        if (!data.ident || !data.timestamp || !data.position) {
-            return res.status(400).json({ message: 'Missing required fields' });
+        for (const data of dataPoints) {
+            // Validate required fields
+            if (!data.ident || !data.timestamp) {
+                logger.warn('Missing required fields in data point:', data);
+                continue;
+            }
+
+            // Convert Flespi dot notation to nested object
+            const convertedData = {};
+            for (const [key, value] of Object.entries(data)) {
+                const keys = key.split('.');
+                let current = convertedData;
+                for (let i = 0; i < keys.length - 1; i++) {
+                    current[keys[i]] = current[keys[i]] || {};
+                    current = current[keys[i]];
+                }
+                current[keys[keys.length - 1]] = value;
+            }
+
+            // Store converted data
+            const trackerData = new TrackerData(convertedData);
+            await trackerData.save();
+
+            // Detailed console output for tracker message
+            console.log('\n=== Tracker Message Received ===');
+            console.log(`Identifier: ${data.ident}`);
+            const timestamp = new Date(data.timestamp * 1000);
+            console.log(`Timestamp: ${timestamp.toLocaleString('en-GB', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            })}`);
+            if (data['position.latitude'] && data['position.longitude']) {
+                console.log(`Location: ${data['position.latitude']}, ${data['position.longitude']}`);
+            }
+            console.log(`Speed: ${data['position.speed'] || 0} km/h`);
+            console.log(`Battery: ${data['battery.level'] || 'N/A'}%`);
+            console.log(`Engine Status: ${data['engine.ignition.status'] ? 'ON' : 'OFF'}`);
+            console.log('============================\n');
+            
+            logger.info(`Received data from tracker: ${data.ident}`);
         }
-
-        // Create new tracker data record
-        const trackerData = new TrackerData({
-            ident: data.ident,
-            timestamp: data.timestamp, // Store raw Unix timestamp
-            position: {
-                latitude: data.position.latitude,
-                longitude: data.position.longitude,
-                speed: data.position.speed
-            },
-            battery: data.battery,
-            engine: data.engine,
-            device: data.device
-        });
-
-        await trackerData.save();
-        
-        // Detailed console output for tracker message
-        console.log('\n=== Tracker Message Received ===');
-        console.log(`Identifier: ${data.ident}`);
-        const timestamp = new Date(data.timestamp * 1000);
-        console.log(`Timestamp: ${timestamp.toLocaleString('en-GB', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: false
-        })}`);
-        console.log(`Location: ${data.position.latitude}, ${data.position.longitude}`);
-        console.log(`Speed: ${data.position.speed || 0} km/h`);
-        console.log(`Battery: ${data.battery?.level || 'N/A'}%`);
-        console.log(`Engine Status: ${data.engine?.ignition?.status ? 'ON' : 'OFF'}`);
-        console.log('============================\n');
-        
-        logger.info(`Received data from tracker: ${data.ident}`);
         res.status(200).json({ message: 'Data received successfully' });
     } catch (error) {
         logger.error('Error saving tracker data:', error);
@@ -150,19 +155,18 @@ router.get('/list', auth.isAuthenticated, async (req, res, next) => {
         const trackers = await Promise.all(req.user.trackers.map(async (identifier) => {
             const lastLocation = await TrackerData.findOne({ ident: identifier })
                 .sort({ timestamp: -1})
-                .select('ident position.latitude position.longitude timestamp device.name battery.level engine.ignition.status position.speed')
                 .lean();
 
             return {
                 identifier,
                 lastLocation: lastLocation ? {
-                    latitude: lastLocation.position.latitude,
-                    longitude: lastLocation.position.longitude,
+                    latitude: lastLocation['position.latitude'],
+                    longitude: lastLocation['position.longitude'],
                     timestamp: lastLocation.timestamp,
-                    deviceName: lastLocation.device?.name || identifier,
-                    batteryLevel: lastLocation.battery?.level,
-                    ignition: lastLocation.engine?.ignition?.status,
-                    speed: lastLocation.position.speed
+                    deviceName: lastLocation['device.name'] || identifier,
+                    batteryLevel: lastLocation['battery.level'],
+                    ignition: lastLocation['engine.ignition.status'],
+                    speed: lastLocation['position.speed']
                 } : null
             };
         }));
@@ -205,7 +209,7 @@ router.get('/history/:identifier', auth.isAuthenticated, async (req, res, next) 
 
         const history = await TrackerData.find(query)
             .sort({ timestamp: 1 })
-            .select('-_id ident position.latitude position.longitude timestamp device.name battery.level engine.ignition.status position.speed')
+            .select('-_id ident timestamp position.latitude position.longitude position.speed battery.level engine.ignition.status device.name')
             .lean();
 
         res.json({ history });
