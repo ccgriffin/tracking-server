@@ -104,6 +104,7 @@ router.post('/login', async (req, res, next) => {
         await user.updateLastLogin();
 
         req.session.userId = user._id;
+        req.session.createdAt = Date.now();
         
         // Detailed console output for successful login
         console.log('\n=== User Login Successful ===');

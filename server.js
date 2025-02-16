@@ -22,14 +22,15 @@ app.use(requestLogger);
 // Session Configuration
 app.use(session({
     secret: process.env.SESSION_SECRET || 'your_secret_key',
-    resave: false,
-    saveUninitialized: false,
+    resave: true,
+    saveUninitialized: true,
     cookie: {
         // Allow non-secure cookies since we're using a reverse proxy
         secure: false,
         httpOnly: true,
         maxAge: 24 * 60 * 60 * 1000 // 24 hours
-    }
+    },
+    name: 'trackingserver.sid'
 }));
 
 // Environment Variables
@@ -39,6 +40,15 @@ const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/tracki
 // Middleware Configuration
 app.use(express.json({ limit: '50mb' })); // Increased limit to 50mb
 
+// API Routes Configuration
+app.use('/api/flespi', flespiRoutes); // Flespi data endpoint (no auth)
+app.use('/api/tracker', auth.isAuthenticated, trackerRoutes); // Protected tracker endpoints
+app.use('/api/auth', authRoutes);
+app.use('/api/admin', auth.isAuthenticated, adminRoutes);
+
+// Trust first proxy
+app.set('trust proxy', 1);
+
 // Serve static files with explicit MIME types
 app.use(express.static('public', {
     setHeaders: (res, path) => {
@@ -47,15 +57,6 @@ app.use(express.static('public', {
         }
     }
 }));
-
-// Trust first proxy
-app.set('trust proxy', 1);
-
-// API Routes Configuration
-app.use('/api/flespi', flespiRoutes); // Flespi data endpoint (no auth)
-app.use('/api/tracker', auth.isAuthenticated, trackerRoutes); // Protected tracker endpoints
-app.use('/api/auth', authRoutes);
-app.use('/api/admin', auth.isAuthenticated, adminRoutes);
 
 // Serve static pages
 app.get('/', (req, res) => {

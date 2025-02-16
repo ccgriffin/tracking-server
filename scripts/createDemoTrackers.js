@@ -1,125 +1,117 @@
 const mongoose = require('mongoose');
 const TrackerData = require('../models/TrackerData');
 
+// Create data points for the last 7 days
+function generateHistoricalData(baseTracker, daysOfHistory = 7) {
+    const dataPoints = [];
+    const now = Math.floor(Date.now() / 1000);
+    const dayInSeconds = 24 * 60 * 60;
+    
+    for (let day = 0; day < daysOfHistory; day++) {
+        // Create 24 points per day (one per hour)
+        for (let hour = 0; hour < 24; hour++) {
+            const timestamp = now - (day * dayInSeconds) - (hour * 3600);
+            
+            // Add some variation to position and speed
+            const latVariation = (Math.random() - 0.5) * 0.01;
+            const lonVariation = (Math.random() - 0.5) * 0.01;
+            const speedVariation = Math.floor(Math.random() * 60);
+            
+            dataPoints.push({
+                ...baseTracker,
+                "timestamp": timestamp,
+                "server.timestamp": timestamp,
+                "position.latitude": baseTracker["position.latitude"] + latVariation,
+                "position.longitude": baseTracker["position.longitude"] + lonVariation,
+                "position.speed": speedVariation,
+                "battery.level": 100 - (Math.floor(Math.random() * 20)), // Random battery level between 80-100
+                "engine.ignition.status": Math.random() > 0.3 // 70% chance of being on
+            });
+        }
+    }
+    
+    return dataPoints;
+}
+
 // Demo tracker configurations
 const demoTrackers = [
     {
-        ident: 'TRUCK001',
-        deviceName: 'Delivery Truck 1',
-        baseLocation: { lat: 51.5074, lng: -0.1278 }, // London
-        route: 'delivery'
+        "channel.id": 1234567,
+        "peer": "xxx.xxx.xxx.xxx:xxxxx",
+        "protocol.id": 14,
+        "device.id": 1234567,
+        "device.name": "Delivery Truck 1",
+        "device.type.id": 123,
+        "ident": "TRUCK001",
+        "position.latitude": 51.5074,
+        "position.longitude": -0.1278,
+        "position.speed": 0,
+        "position.direction": 0,
+        "position.satellites": 10,
+        "position.altitude": 100,
+        "alarm.event": false,
+        "crash.event": false,
+        "event.enum": 247,
+        "event.priority.enum": 2
     },
     {
-        ident: 'VAN002',
-        deviceName: 'Service Van 2',
-        baseLocation: { lat: 51.4545, lng: -0.9685 }, // Reading
-        route: 'service'
+        "channel.id": 1234567,
+        "peer": "xxx.xxx.xxx.xxx:xxxxx",
+        "protocol.id": 14,
+        "device.id": 1234567,
+        "device.name": "Service Van 2",
+        "device.type.id": 123,
+        "ident": "VAN002",
+        "position.latitude": 51.4545,
+        "position.longitude": -0.9685,
+        "position.speed": 0,
+        "position.direction": 0,
+        "position.satellites": 10,
+        "position.altitude": 100,
+        "alarm.event": false,
+        "crash.event": false,
+        "event.enum": 247,
+        "event.priority.enum": 2
     },
     {
-        ident: 'CAR003',
-        deviceName: 'Sales Car 3',
-        baseLocation: { lat: 51.5142, lng: -0.0931 }, // City of London
-        route: 'sales'
+        "channel.id": 1234567,
+        "peer": "xxx.xxx.xxx.xxx:xxxxx",
+        "protocol.id": 14,
+        "device.id": 1234567,
+        "device.name": "Sales Car 3",
+        "device.type.id": 123,
+        "ident": "CAR003",
+        "position.latitude": 51.5142,
+        "position.longitude": -0.0931,
+        "position.speed": 0,
+        "position.direction": 0,
+        "position.satellites": 10,
+        "position.altitude": 100,
+        "alarm.event": false,
+        "crash.event": false,
+        "event.enum": 247,
+        "event.priority.enum": 2
     },
     {
-        ident: 'FLEET004',
-        deviceName: 'Fleet Vehicle 4',
-        baseLocation: { lat: 51.7520, lng: -1.2577 }, // Oxford
-        route: 'fleet'
+        "channel.id": 1234567,
+        "peer": "xxx.xxx.xxx.xxx:xxxxx",
+        "protocol.id": 14,
+        "device.id": 1234567,
+        "device.name": "Fleet Vehicle 4",
+        "device.type.id": 123,
+        "ident": "FLEET004",
+        "position.latitude": 51.7520,
+        "position.longitude": -1.2577,
+        "position.speed": 0,
+        "position.direction": 0,
+        "position.satellites": 10,
+        "position.altitude": 100,
+        "alarm.event": false,
+        "crash.event": false,
+        "event.enum": 247,
+        "event.priority.enum": 2
     }
 ];
-
-// Generate random movement patterns
-function generateRoutePoints(baseLocation, routeType, hours = 24) {
-    const points = [];
-    const now = new Date();
-    const movePatterns = {
-        delivery: { maxDist: 0.05, stopTime: 15, speed: 50 },
-        service: { maxDist: 0.02, stopTime: 30, speed: 40 },
-        sales: { maxDist: 0.03, stopTime: 45, speed: 35 },
-        fleet: { maxDist: 0.04, stopTime: 20, speed: 45 }
-    };
-
-    const pattern = movePatterns[routeType];
-    const updateInterval = 500; // 500ms between updates when moving
-    const totalPoints = hours * 60 * 60 * 1000 / updateInterval;
-    
-    let currentLat = baseLocation.lat;
-    let currentLng = baseLocation.lng;
-    let currentDirection = Math.random() * 360;
-    let isMoving = Math.random() > 0.3;
-    let stopDuration = 0;
-    let batteryLevel = 95;
-    let lastBatteryUpdate = 0;
-
-    for (let i = 0; i < totalPoints; i++) {
-        const timestamp = new Date(now - (totalPoints - i) * updateInterval);
-        
-        // Update movement state every 5-15 minutes
-        if (i % Math.floor(Math.random() * 600 + 300) === 0) {
-            isMoving = Math.random() > 0.3;
-            if (isMoving) {
-                currentDirection = Math.random() * 360;
-            } else {
-                stopDuration = Math.floor(Math.random() * pattern.stopTime) * 60 * 1000;
-            }
-        }
-
-        // Update battery level every hour
-        if (timestamp - lastBatteryUpdate >= 3600000) {
-            batteryLevel = Math.max(20, batteryLevel - Math.random() * 2);
-            lastBatteryUpdate = timestamp;
-        }
-
-        if (isMoving) {
-            // Calculate new position based on speed and direction
-            const speed = pattern.speed * (0.8 + Math.random() * 0.4); // Speed variation
-            const distance = speed * (updateInterval / 1000) / 3600; // Distance in degrees
-            const directionRad = currentDirection * Math.PI / 180;
-            
-            currentLat += distance * Math.cos(directionRad);
-            currentLng += distance * Math.sin(directionRad);
-
-            // Keep within max distance from base
-            const distFromBase = Math.sqrt(
-                Math.pow(currentLat - baseLocation.lat, 2) + 
-                Math.pow(currentLng - baseLocation.lng, 2)
-            );
-            if (distFromBase > pattern.maxDist) {
-                // Turn around
-                currentDirection = (currentDirection + 180) % 360;
-            }
-
-            const point = {
-                timestamp,
-                position: {
-                    latitude: currentLat,
-                    longitude: currentLng,
-                    speed: speed,
-                    direction: currentDirection,
-                    satellites: Math.floor(Math.random() * 4) + 8
-                },
-                battery: {
-                    level: batteryLevel,
-                    voltage: 11.5 + (batteryLevel / 100) * 3
-                },
-                'external.powersource.voltage': isMoving ? 13.8 + Math.random() * 0.4 : 12.2 + Math.random() * 0.3,
-                engine: {
-                    ignition: {
-                        status: isMoving
-                    }
-                },
-                device: {
-                    name: routeType.charAt(0).toUpperCase() + routeType.slice(1) + ' Vehicle'
-                }
-            };
-
-            points.push(point);
-        }
-    }
-
-    return points;
-}
 
 async function createDemoData() {
     try {
@@ -128,25 +120,21 @@ async function createDemoData() {
             useUnifiedTopology: true
         });
 
+        // Generate historical data for each tracker
+        const allDataPoints = [];
+        for (const tracker of demoTrackers) {
+            const historicalData = generateHistoricalData(tracker);
+            allDataPoints.push(...historicalData);
+        }
+
         // Clear existing demo data
         await TrackerData.deleteMany({
             ident: { $in: demoTrackers.map(t => t.ident) }
         });
 
-        // Generate and insert new demo data
-        for (const tracker of demoTrackers) {
-            const points = generateRoutePoints(tracker.baseLocation, tracker.route);
-            const trackerData = points.map(point => ({
-                ...point,
-                ident: tracker.ident,
-                'device.name': tracker.deviceName
-            }));
-
-            await TrackerData.insertMany(trackerData);
-            console.log(`Created demo data for ${tracker.deviceName}`);
-        }
-
-        console.log('All demo tracker data created successfully');
+        // Insert all data points
+        await TrackerData.insertMany(allDataPoints);
+        console.log(`Created ${allDataPoints.length} historical data points for demo trackers`);
         process.exit(0);
     } catch (error) {
         console.error('Error creating demo data:', error);

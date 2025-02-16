@@ -183,15 +183,9 @@
             let hasMarkers = false;
 
             trackers.forEach(tracker => {
-                if (tracker.lastLocation) {
-                    const latitude = tracker.lastLocation['position.latitude'];
-                    const longitude = tracker.lastLocation['position.longitude'];
+                if (tracker.lastLocation && tracker.lastLocation.metadata.hasLocation) {
+                    const { latitude, longitude } = tracker.lastLocation;
                     
-                    if (!latitude || !longitude) {
-                        console.warn(`Invalid coordinates for tracker ${tracker.identifier}`);
-                        return;
-                    }
-
                     const marker = L.marker([latitude, longitude])
                         .bindPopup(createPopupContent(tracker));
                     
@@ -224,10 +218,11 @@
             });
             return `
                 <div class="popup-content">
-                    <h3>${tracker.lastLocation['device.name'] || tracker.identifier}</h3>
-                    <p>Speed: ${tracker.lastLocation['position.speed'] || 0} km/h</p>
-                    <p>Battery: ${tracker.lastLocation['battery.level'] || 'N/A'}%</p>
-                    <p>Last Update: ${formattedTime}</p>
+                    <h3>${tracker.lastLocation.deviceName}</h3>
+                    <p>Speed: ${tracker.lastLocation.speed || 0} km/h</p>
+                    <p>Battery: ${tracker.lastLocation.batteryLevel || 'N/A'}%</p>
+                    <p>Last Update: ${tracker.lastLocation.formattedTime}</p>
+                    <p class="debug-info">Raw Data Available</p>
                 </div>
             `;
         }
@@ -315,25 +310,18 @@
 
                 const coordinates = [];
                 data.history.forEach((point, index) => {
-                    const pos = [point['position.latitude'], point['position.longitude']];
+                    if (!point.metadata.hasLocation) return;
+                    
+                    const pos = [point.latitude, point.longitude];
                     coordinates.push(pos);
                     
-                    const timestamp = new Date(point.timestamp * 1000);
-                    const formattedTime = timestamp.toLocaleString('en-GB', {
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        second: '2-digit',
-                        hour12: false
-                    });
                     const marker = L.marker(pos).bindPopup(`
                         <div class="popup-content">
-                            <h3>${point.device?.name || identifier}</h3>
-                            <p>Speed: ${point['position.speed'] || 0} km/h</p>
-                            <p>Battery: ${point['battery.level'] || 'N/A'}%</p>
-                            <p>Time: ${formattedTime}</p>
+                            <h3>${point.deviceName}</h3>
+                            <p>Speed: ${point.speed || 0} km/h</p>
+                            <p>Battery: ${point.batteryLevel || 'N/A'}%</p>
+                            <p>Time: ${point.formattedTime}</p>
+                            <p class="debug-info">Raw Data Available</p>
                         </div>
                     `);
                     markers[`${identifier}_${index}`] = marker;
@@ -486,7 +474,7 @@
             const now = new Date();
             const lastUpdateTime = new Date(device.lastLocation.timestamp * 1000);
             const isActive = (now - lastUpdateTime) < INACTIVE_THRESHOLD;
-            const speedMph = kmhToMph(device.lastLocation['position.speed'] || 0);
+            const speedMph = kmhToMph(device.lastLocation.speed || 0);
 
             return `
                 <div class="device-card ${isActive ? 'status-active' : 'status-inactive'}" data-identifier="${device.identifier}">
@@ -494,7 +482,7 @@
                     <div class="device-header">
                         <h4>
                             <i class="fas fa-satellite-dish"></i>
-                            ${device.lastLocation['device.name'] || device.identifier}
+                            ${device.lastLocation.deviceName}
                         </h4>
                         <div class="device-actions">
                             <button class="action-btn" onclick="removeTracker('${device.identifier}')">
@@ -509,11 +497,15 @@
                         </div>
                         <div class="metric">
                             <i class="fas fa-battery-three-quarters"></i>
-                            <span>${device.lastLocation['battery.level'] || 'N/A'}%</span>
+                            <span>${device.lastLocation.batteryLevel || 'N/A'}%</span>
                         </div>
                         <div class="metric">
                             <i class="fas fa-clock"></i>
                             <span>${getTimeAgo(lastUpdateTime)}</span>
+                        </div>
+                        <div class="metric">
+                            <i class="fas fa-info-circle"></i>
+                            <span>Raw Data</span>
                         </div>
                     </div>
                     <div class="device-actions">
